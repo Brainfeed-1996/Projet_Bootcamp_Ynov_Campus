@@ -1,0 +1,13 @@
+timestamp,level,source,message
+2026-09-11T10:00:01Z,INFO,auth,"User 'alice' logged in successfully from 10.0.0.12"
+2026-09-11T10:00:45Z,WARNING,auth,"Failed login for user 'admin' from 198.51.100.23"
+2026-09-11T10:01:02Z,ERROR,auth,"Authentication failed: password mismatch for 'root'"
+2026-09-11T10:02:15Z,CRITICAL,firewall,"Possible port scan detected from 203.0.113.7 (ports 22,80,443)"
+2026-09-11T10:03:00Z,ERROR,web,"SQL injection attempt: GET /products?id=1 OR 1=1 --"
+2026-09-11T10:03:30Z,WARNING,web,"Possible XSS payload in query: /search?q=<script>alert(1)</script>"
+2026-09-11T10:04:12Z,INFO,system,"Scheduled backup completed in 42s"
+2026-09-11T10:05:00Z,ERROR,db,"Connection pool exhausted: timeout waiting for available connection"
+2026-09-11T10:06:18Z,CRITICAL,security,"Privilege escalation attempt by uid=1000 (user 'alice')"
+2026-09-11T10:07:44Z,WARNING,network,"Outbound traffic spike to 185.220.101.1:443 (possible C2 beacon)"
+2026-09-11T10:08:20Z,INFO,api,"Request POST /api/users 201 created user_id=7"
+2026-09-11T10:09:05Z,ERROR,web,"500 Internal Server Error on /checkout (TypeError: NoneType)"

@@ -127,7 +127,7 @@ curl http://localhost:5000/analyses
 
 ## Démo Demo Day
 
-Consultez `DEMO.md` pour le support de démonstration :
+Consultez `DEMO_DAY.md` pour le support de démonstration :
 
 - Durée : **6 minutes** de démo + Q&A.
 - Répartition du temps de parole : **50/50** entre Presenter A et Presenter B.

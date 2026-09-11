@@ -1,0 +1,12 @@
+[
+  {"timestamp": "2026-09-11T10:00:01Z", "level": "INFO", "source": "auth", "message": "User 'alice' logged in successfully from 10.0.0.12"},
+  {"timestamp": "2026-09-11T10:00:45Z", "level": "WARNING", "source": "auth", "message": "Failed login for user 'admin' from 198.51.100.23"},
+  {"timestamp": "2026-09-11T10:01:02Z", "level": "ERROR", "source": "auth", "message": "Authentication failed: password mismatch for 'root'"},
+  {"timestamp": "2026-09-11T10:02:15Z", "level": "CRITICAL", "source": "firewall", "message": "Possible port scan detected from 203.0.113.7 (ports 22,80,443)"},
+  {"timestamp": "2026-09-11T10:03:00Z", "level": "ERROR", "source": "web", "message": "SQL injection attempt: GET /products?id=1 OR 1=1 --"},
+  {"timestamp": "2026-09-11T10:03:30Z", "level": "WARNING", "source": "web", "message": "Possible XSS payload in query: /search?q=<script>alert(1)</script>"},
+  {"timestamp": "2026-09-11T10:04:12Z", "level": "INFO", "source": "system", "message": "Scheduled backup completed in 42s"},
+  {"timestamp": "2026-09-11T10:05:00Z", "level": "ERROR", "source": "db", "message": "Connection pool exhausted: timeout waiting for available connection"},
+  {"timestamp": "2026-09-11T10:06:18Z", "level": "CRITICAL", "source": "security", "message": "Privilege escalation attempt by uid=1000 (user 'alice')"},
+  {"timestamp": "2026-09-11T10:07:44Z", "level": "WARNING", "source": "network", "message": "Outbound traffic spike to 185.220.101.1:443 (possible C2 beacon)"}
+]
