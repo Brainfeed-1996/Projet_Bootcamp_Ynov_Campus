@@ -61,6 +61,18 @@ services:
         limits:
           cpus: '0.25'
           memory: 128M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
   web:
@@ -77,14 +89,62 @@ services:
       - secret_key
     environment:
       - VAULT_ADDR=http://vault:8200
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+      - /app/.flask
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   db:
     extends:
       file: compose.yaml
       service: db
+    depends_on:
+      vault-agent:
+        condition: service_started
     secrets:
       - postgres_user
       - postgres_password
+    environment:
+      - VAULT_ADDR=http://vault:8200
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 100
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
 
 secrets:
   db_password:

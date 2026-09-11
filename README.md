@@ -10,14 +10,16 @@ API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un co
 ## Table des matières
 
 1. [Prérequis](#prérequis)
-2. [Tests automatisés sans IA réelle](#tests-automatisés-sans-ia-réelle)
-3. [Démarrage rapide](#démarrage-rapide)
-4. [Sécurité et secrets](#sécurité-et-secrets)
-5. [Endpoints](#endpoints)
-6. [CI/CD et scan](#cicd-et-scan)
-7. [Démo Demo Day](#démo-demo-day)
-8. [Définition of Done](#définition-of-done)
-9. [Support et nettoyage](#support-et-nettoyage)
+2. [Installation](#installation)
+3. [Tests automatisés sans IA réelle](#tests-automatisés-sans-ia-réelle)
+4. [Démarrage rapide](#démarrage-rapide)
+5. [Sécurité et secrets](#sécurité-et-secrets)
+6. [Endpoints](#endpoints)
+7. [CI/CD et scan](#cicd-et-scan)
+8. [Démo Demo Day](#démo-demo-day)
+9. [Problèmes courants et solutions](#problèmes-courants-et-solutions)
+10. [Définition of Done](#définition-of-done)
+11. [Support et nettoyage](#support-et-nettoyage)
 
 ---
 
@@ -28,6 +30,23 @@ API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un co
 - Git
 
 Variables d'environnement locales : copiez `.env.production.example` en `.env.production` et adaptez les secrets si vous lancez la production hors Docker.
+
+---
+
+## Installation
+
+### Sans Docker (développement local)
+
+```bash
+pip install -r requirements.txt
+```
+
+### Avec Docker (recommandé)
+
+```bash
+./scripts/init-docker-secrets.sh
+docker compose up --build -d
+```
 
 ---
 
@@ -145,6 +164,23 @@ Consultez `DEMO_DAY.md` pour le support de démonstration :
 - [x] Documentation finale et support Demo Day fournis.
 - [x] Secrets exclus de Git et de l'image Docker.
 - [x] Fournisseurs IA validés sans réseau et avec erreurs explicites.
+
+---
+
+## Problèmes courants et solutions
+
+| Problème | Cause probable | Solution |
+|----------|---------------|----------|
+| `port 5000 already in use` | Un autre service utilise le port | `docker compose down` ou changer le port dans `compose.yaml` (ex: `5001:5000`) |
+| `/health` retourne `503` — `database: down` | PostgreSQL pas encore prêt ou secrets manquants | Vérifier `docker compose logs db` ; attendre le healthcheck ; relancer `./scripts/init-docker-secrets.sh` |
+| `ModuleNotFoundError` | Dépendances non installées | `pip install -r requirements.txt` (hors Docker) ou `docker compose up --build` |
+| `/logs/1/analyze` retourne `502` | LLM externe (OpenAI/Ollama) injoignable | Vérifier `LLM_PROVIDER` : mettre `fake` pour la démo offline. Le fallback est automatique. |
+| `pytest` échoue avec `RuntimeError: DATABASE_URL` | `TESTING` non défini en local | `TESTING=1 pytest -v` active SQLite en mémoire |
+| `.env` missing / secrets introuvables | Fichier `.env` absent ou non initialisé | `cp .env.production.example .env.production` puis adapter les valeurs |
+| Trivy trouve des CVE HIGH/CRITICAL | Image de base vulnérable | `docker pull python:3.11-slim` puis rebuild ; vérifier `.trivyignore` pour les exceptions justifiées |
+| Tests échouent sur une machine propre | Démarrage incomplet | `git clone`, `./scripts/init-docker-secrets.sh`, `docker compose up --build -d`, puis `pytest -v` |
+| JSON invalide dans les requêtes curl | Guillemets ou apostrophes mal échappés | Utiliser les commandes du `demo-commands.sh` ou du fichier `DEMO_DAY.md` |
+| `docker compose` non trouvé | Docker non installé ou non démarré | Installer Docker Desktop ; vérifier `docker --version` et `docker compose version` |
 
 ---
 

@@ -42,6 +42,7 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    pids_limit: 100
     deploy:
       resources:
         limits:
@@ -53,6 +54,12 @@ services:
       restart_policy:
         condition: on-failure
         max_attempts: 3
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:80/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   db:
     image: postgres:15-alpine

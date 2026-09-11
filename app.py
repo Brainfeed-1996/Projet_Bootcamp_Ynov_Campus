@@ -1,5 +1,6 @@
 import atexit
 import csv
+import json
 import logging
 import os
 import time
@@ -7,7 +8,7 @@ from datetime import datetime
 
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -22,9 +23,13 @@ from sqlalchemy import (
     select,
     text,
 )
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 
+from providers.base import ProviderConfigurationError, ProviderError
 from providers.fake_provider import FakeLLMProvider
 from providers.ollama_provider import OllamaLLMProvider
 from providers.openai_provider import OpenAILLMProvider
@@ -34,6 +39,31 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+
+# Configuration constants
+MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_BULK_ITEMS = 10000  # Maximum items in bulk ingest
+
+
+class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
+    """Middleware to limit request body size and prevent unbounded memory usage."""
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length:
+            try:
+                size = int(content_length)
+                if size > MAX_REQUEST_SIZE:
+                    return JSONResponse(
+                        status_code=413,
+                        content={"detail": f"Request body too large. Maximum size is {MAX_REQUEST_SIZE} bytes."},
+                    )
+            except ValueError:
+                pass
+
+        # For streaming requests, we can't easily check size upfront
+        # but we'll enforce limits in the endpoint logic
+        return await call_next(request)
 
 
 def _read_secret_from_file(env_var: str, file_env_var: str, default: str = "") -> str:
@@ -77,8 +107,8 @@ def wait_for_db(max_retries=30, delay=2):
                 conn.execute(text("SELECT 1"))
             logger.info("Database connection established.")
             return engine
-        except Exception as exc:
-            logger.warning(f"DB not ready (attempt {attempt}/{max_retries}): {exc}")
+        except (OperationalError, SQLAlchemyError):
+            logger.warning("DB not ready (attempt %s/%s)", attempt, max_retries)
             time.sleep(delay)
     raise RuntimeError("Database unavailable after max retries.")
 
@@ -142,13 +172,16 @@ app = FastAPI(
     contact={"name": "Music Hall - DevSecOps"},
 )
 
+# Add request size limit middleware
+app.add_middleware(RequestSizeLimitMiddleware)
+
 
 VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 MAX_LIMIT = 1000
 MIN_LIMIT = 1
 
 
-# --- Helpers --- 
+# --- Helpers ---
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
@@ -258,63 +291,89 @@ _provider = None
 
 
 def get_llm_provider():
+    """Get LLM provider with fallback chain: OpenAI -> Ollama -> Fake."""
     global _provider
-    if _provider is None:
-        provider_name = os.environ.get("LLM_PROVIDER", "fake").lower()
-        if provider_name == "openai":
-            _provider = OpenAILLMProvider()
-        elif provider_name == "ollama":
-            _provider = OllamaLLMProvider()
-        else:
-            _provider = FakeLLMProvider()
-    return _provider
+    if _provider is not None:
+        return _provider
+
+    # Try providers in order of preference
+    providers_to_try = [
+        ("openai", OpenAILLMProvider),
+        ("ollama", OllamaLLMProvider),
+        ("fake", FakeLLMProvider),
+    ]
+
+    # Check if a specific provider is requested
+    requested = os.environ.get("LLM_PROVIDER", "").lower()
+    if requested in ("openai", "ollama", "fake"):
+        # Move requested provider to front of list
+        providers_to_try = [
+            (name, cls) for name, cls in providers_to_try if name == requested
+        ] + [(name, cls) for name, cls in providers_to_try if name != requested]
+
+    last_error = None
+    for name, provider_class in providers_to_try:
+        try:
+            _provider = provider_class()
+            logger.info("LLM provider initialized: %s", name)
+            return _provider
+        except (ProviderError, ProviderConfigurationError, RuntimeError, ValueError, OSError) as e:
+            logger.warning("Failed to initialize %s provider: %s", name, e)
+            last_error = e
+            continue
+
+    # If all providers fail, raise the last error
+    logger.error("All LLM providers failed to initialize")
+    raise last_error or RuntimeError("No LLM provider available")
 
 
 # --- Routes utilisateurs ---
 @app.get("/users/{user_id}", response_model=UserRead, tags=["Users"])
-def get_user(user_id: int):
+def get_user(user_id: int, db: Session = Depends(get_db)):
     if user_id <= 0:
         raise HTTPException(400, "ID utilisateur invalide (doit être > 0).")
-    with SessionLocal() as db:
-        user = db.get(User, user_id)
-        if not user or not user.is_active:
-            raise HTTPException(404, "Utilisateur introuvable.")
-        return user
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(404, "Utilisateur introuvable.")
+    return user
 
 
 @app.post("/users", response_model=UserRead, status_code=201, tags=["Users"])
-def create_user(payload: UserCreate):
-    with SessionLocal() as db:
-        existing = db.execute(
-            text("SELECT id FROM users WHERE username = :u OR email = :e"),
-            {"u": payload.username, "e": payload.email},
-        ).fetchone()
-        if existing:
-            raise HTTPException(409, "Utilisateur ou email déjà existant.")
-        user = User(username=payload.username, email=payload.email)
-        user.password_hash = hash_password(payload.password)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-        return user
+def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+    existing = db.execute(
+        text("SELECT id FROM users WHERE username = :u OR email = :e"),
+        {"u": payload.username, "e": payload.email},
+    ).fetchone()
+    if existing:
+        raise HTTPException(409, "Utilisateur ou email déjà existant.")
+    user = User(username=payload.username, email=payload.email)
+    user.password_hash = hash_password(payload.password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.delete("/users/{user_id}", tags=["Users"])
-def delete_user(user_id: int):
+def delete_user(user_id: int, db: Session = Depends(get_db)):
     if user_id <= 0:
         raise HTTPException(400, "ID utilisateur invalide.")
-    with SessionLocal() as db:
-        user = db.get(User, user_id)
-        if not user:
-            raise HTTPException(404, "Utilisateur introuvable.")
-        user.is_active = False
-        db.commit()
-        return {"id": user_id, "status": "deleted"}
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(404, "Utilisateur introuvable.")
+    user.is_active = False
+    db.commit()
+    return {"id": user_id, "status": "deleted"}
 
 
 # --- Routes logs ---
 @app.get("/logs", response_model=list[LogRead], tags=["Logs"])
-def get_logs(level: str | None = None, source: str | None = None, limit: int = 100):
+def get_logs(
+    level: str | None = None,
+    source: str | None = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
     if limit < MIN_LIMIT or limit > MAX_LIMIT:
         raise HTTPException(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
     if level:
@@ -327,8 +386,7 @@ def get_logs(level: str | None = None, source: str | None = None, limit: int = 1
     if source:
         stmt = stmt.where(Log.source == source)
     stmt = stmt.order_by(Log.created_at.desc()).limit(limit)
-    with SessionLocal() as db:
-        rows = db.execute(stmt).scalars().all()
+    rows = db.execute(stmt).scalars().all()
     return [
         {
             "id": r.id,
@@ -342,80 +400,79 @@ def get_logs(level: str | None = None, source: str | None = None, limit: int = 1
 
 
 @app.post("/logs", response_model=LogRead, status_code=201, tags=["Logs"])
-def create_log(payload: LogCreate):
-    with SessionLocal() as db:
-        log = Log(level=payload.level, message=payload.message, source=payload.source)
-        db.add(log)
-        db.commit()
-        db.refresh(log)
-        return {
-            "id": log.id,
-            "level": log.level,
-            "message": log.message,
-            "source": log.source,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
+def create_log(payload: LogCreate, db: Session = Depends(get_db)):
+    log = Log(level=payload.level, message=payload.message, source=payload.source)
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return {
+        "id": log.id,
+        "level": log.level,
+        "message": log.message,
+        "source": log.source,
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+    }
 
 
 @app.get("/logs/{log_id}", response_model=LogRead, tags=["Logs"])
-def get_log(log_id: int):
+def get_log(log_id: int, db: Session = Depends(get_db)):
     if log_id <= 0:
         raise HTTPException(400, "ID de log invalide.")
-    with SessionLocal() as db:
-        log = db.get(Log, log_id)
-        if not log:
-            raise HTTPException(404, "Log introuvable.")
-        return {
-            "id": log.id,
-            "level": log.level,
-            "message": log.message,
-            "source": log.source,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-        }
+    log = db.get(Log, log_id)
+    if not log:
+        raise HTTPException(404, "Log introuvable.")
+    return {
+        "id": log.id,
+        "level": log.level,
+        "message": log.message,
+        "source": log.source,
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+    }
 
 
 @app.post("/logs/bulk", response_model=BulkResult, tags=["Logs"])
-async def ingest_logs(data: Request):
+async def ingest_logs(request: Request, db: Session = Depends(get_db)):
     """Ingère une liste de logs au format JSON.
 
     Corps attendu :
     [{"message": "...", "level": "ERROR", "source": "api"}, ...]
     """
     try:
-        payload = await data.json()
-    except Exception:
+        payload = await request.json()
+    except (ValueError, json.JSONDecodeError):
         raise HTTPException(400, "Corps JSON invalide.")
     if not isinstance(payload, list):
         raise HTTPException(400, "Le corps doit être un tableau JSON de logs.")
+    if len(payload) > MAX_BULK_ITEMS:
+        raise HTTPException(400, f"Trop d'éléments (max {MAX_BULK_ITEMS}).")
     errors: list[str] = []
     ingested = 0
-    with SessionLocal() as db:
-        for i, rec in enumerate(payload, start=1):
-            if not isinstance(rec, dict):
-                errors.append(f"Ligne {i} : entrée non-objet.")
-                continue
-            message = (rec.get("message") or "").strip()
-            level = (rec.get("level") or "INFO").upper()
-            source = (rec.get("source") or "unknown").strip()
-            if not message:
-                errors.append(f"Ligne {i} : le champ 'message' est vide.")
-                continue
-            if level not in VALID_LEVELS:
-                errors.append(
-                    f"Ligne {i} : level '{level}' invalide. Valeurs : {sorted(VALID_LEVELS)}"
-                )
-                continue
-            if len(message) > 4096:
-                errors.append(f"Ligne {i} : 'message' dépasse 4096 caractères.")
-                continue
-            db.add(Log(level=level, message=message, source=source))
-            ingested += 1
-        db.commit()
+    for i, rec in enumerate(payload, start=1):
+        if not isinstance(rec, dict):
+            errors.append(f"Ligne {i} : entrée non-objet.")
+            continue
+        message = (rec.get("message") or "").strip()
+        level = (rec.get("level") or "INFO").upper()
+        source = (rec.get("source") or "unknown").strip()
+        if not message:
+            errors.append(f"Ligne {i} : le champ 'message' est vide.")
+            continue
+        if level not in VALID_LEVELS:
+            errors.append(
+                f"Ligne {i} : level '{level}' invalide. Valeurs : {sorted(VALID_LEVELS)}"
+            )
+            continue
+        if len(message) > 4096:
+            errors.append(f"Ligne {i} : 'message' dépasse 4096 caractères.")
+            continue
+        db.add(Log(level=level, message=message, source=source))
+        ingested += 1
+    db.commit()
     return BulkResult(ingested=ingested, rejected=len(errors), errors=errors)
 
 
 @app.post("/logs/ingest-csv", response_model=BulkResult, tags=["Logs"])
-async def ingest_csv(file: UploadFile):
+async def ingest_csv(file: UploadFile, db: Session = Depends(get_db)):
     """Ingère des logs au format CSV.
 
     Colonnes attendues : level,message,source
@@ -423,10 +480,14 @@ async def ingest_csv(file: UploadFile):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(400, "Seul le format CSV (.csv) est accepté.")
     content = await file.read()
+    if len(content) > MAX_REQUEST_SIZE:
+        raise HTTPException(413, f"Fichier trop volumineux (max {MAX_REQUEST_SIZE} bytes).")
+
     try:
         text_content = content.decode("utf-8")
     except UnicodeDecodeError:
         raise HTTPException(400, "Encodage invalide : le CSV doit être en UTF-8.")
+
     reader = csv.DictReader(text_content.splitlines())
     required = {"message"}
     if reader.fieldnames is None or not required.issubset({(f or "").strip() for f in reader.fieldnames}):
@@ -438,6 +499,9 @@ async def ingest_csv(file: UploadFile):
     errors: list[str] = []
     records = []
     for i, row in enumerate(reader, start=2):
+        if len(records) >= MAX_BULK_ITEMS:
+            errors.append(f"Ligne {i} : limite de {MAX_BULK_ITEMS} enregistrements atteinte.")
+            break
         message = (row.get("message") or "").strip()
         level = (row.get("level") or "INFO").upper()
         source = (row.get("source") or "unknown").strip()
@@ -449,51 +513,48 @@ async def ingest_csv(file: UploadFile):
             continue
         records.append({"message": message, "level": level, "source": source})
     ingested = 0
-    with SessionLocal() as db:
-        for rec in records:
-            db.add(Log(**rec))
-            ingested += 1
-        db.commit()
+    for rec in records:
+        db.add(Log(**rec))
+        ingested += 1
+    db.commit()
     return BulkResult(ingested=ingested, rejected=len(errors), errors=errors)
 
 
 @app.post("/logs/{log_id}/analyze", response_model=dict, status_code=201, tags=["Analyses"])
-def analyze_log(log_id: int):
+def analyze_log(log_id: int, db: Session = Depends(get_db)):
     if log_id <= 0:
         raise HTTPException(400, "ID de log invalide.")
-    with SessionLocal() as db:
-        log = db.get(Log, log_id)
-        if not log:
-            raise HTTPException(404, "Log introuvable.")
-        provider = get_llm_provider()
-        try:
-            result: AnalysisResult = provider.analyze(log.message)
-        except Exception as exc:
-            logger.error(f"LLM analysis failed: {exc}")
-            raise HTTPException(502, "Analyse IA indisponible.")
-        analyse = Analyse(
-            type="log_analysis",
-            input_data=log.message,
-            result=result.model_dump_json(),
-        )
-        db.add(analyse)
-        db.commit()
-        db.refresh(analyse)
-        return {
-            "id": analyse.id,
-            "log_id": log.id,
-            "result": result.model_dump(),
-        }
+    log = db.get(Log, log_id)
+    if not log:
+        raise HTTPException(404, "Log introuvable.")
+    provider = get_llm_provider()
+    try:
+        result: AnalysisResult = provider.analyze(log.message)
+    except (ProviderError, RuntimeError, ValueError, TimeoutError):
+        logger.error("LLM analysis failed")
+        raise HTTPException(502, "Analyse IA indisponible.")
+    analyse = Analyse(
+        type="log_analysis",
+        input_data=log.message,
+        result=result.model_dump_json(),
+    )
+    db.add(analyse)
+    db.commit()
+    db.refresh(analyse)
+    return {
+        "id": analyse.id,
+        "log_id": log.id,
+        "result": result.model_dump(),
+    }
 
 
 # --- Routes analyses ---
 @app.get("/analyses", response_model=list[AnalyseRead], tags=["Analyses"])
-def get_analyses(limit: int = 50):
+def get_analyses(limit: int = 50, db: Session = Depends(get_db)):
     if limit < MIN_LIMIT or limit > MAX_LIMIT:
         raise HTTPException(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
     stmt = select(Analyse).order_by(Analyse.created_at.desc()).limit(limit)
-    with SessionLocal() as db:
-        rows = db.execute(stmt).scalars().all()
+    rows = db.execute(stmt).scalars().all()
     return [
         {
             "id": r.id,
@@ -507,24 +568,23 @@ def get_analyses(limit: int = 50):
 
 
 @app.post("/analyses", response_model=AnalyseRead, status_code=201, tags=["Analyses"])
-def create_analyse(payload: dict):
+def create_analyse(payload: dict, db: Session = Depends(get_db)):
     if "type" not in payload:
         raise HTTPException(400, "Champ 'type' requis.")
     analyse_type = payload["type"]
     input_data = payload.get("input_data", "")
     result = payload.get("result", "")
-    with SessionLocal() as db:
-        a = Analyse(type=analyse_type, input_data=input_data, result=result)
-        db.add(a)
-        db.commit()
-        db.refresh(a)
-        return {
-            "id": a.id,
-            "type": a.type,
-            "input_data": a.input_data,
-            "result": a.result,
-            "created_at": a.created_at.isoformat() if a.created_at else None,
-        }
+    a = Analyse(type=analyse_type, input_data=input_data, result=result)
+    db.add(a)
+    db.commit()
+    db.refresh(a)
+    return {
+        "id": a.id,
+        "type": a.type,
+        "input_data": a.input_data,
+        "result": a.result,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    }
 
 
 # --- Santé ---
@@ -534,7 +594,7 @@ def health():
         with get_engine().connect() as conn:
             conn.execute(text("SELECT 1"))
         return {"status": "ok", "database": "up"}
-    except Exception:
+    except SQLAlchemyError:
         return JSONResponse(
             status_code=503, content={"status": "error", "database": "down"}
         )
@@ -551,6 +611,16 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={"detail": "Validation échouée.", "errors": details},
+    )
+
+
+@app.exception_handler(Exception)
+async def internal_server_error_handler(request: Request, exc: Exception):
+    """Catch-all handler for unhandled exceptions (500 errors)."""
+    logger.exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
     )
 
 

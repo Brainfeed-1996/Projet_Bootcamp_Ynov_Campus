@@ -31,12 +31,21 @@ services:
     tmpfs:
       - /tmp
       - /var/tmp
-    # Limites de ressources pour le développement
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     deploy:
       resources:
         limits:
           cpus: '0.50'
           memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   db:
     image: postgres:15-alpine

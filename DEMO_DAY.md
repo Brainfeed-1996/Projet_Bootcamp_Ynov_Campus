@@ -12,16 +12,16 @@
 
 | Temps | Durée | Orateur | Action / Parole clé | Support |
 |-------|-------|---------|---------------------|---------|
-| 0:00–0:30 | 30 s | **A** | **Intro** : « Music Hall — service d’ingestion et d’analyse de logs sécurisé. Flask + PostgreSQL + LLM (OpenAI/Ollama/Fake). DevSecOps natif : secrets, scans, CI. » | Écran titre + architecture (1 slide) |
-| 0:30–1:10 | 40 s | **B** | **Architecture & Sécurité conteneur** : « Base python:3.11-slim, user non-root, read-only fs, cap_drop ALL, Trivy intégré au build. 0 CVE HIGH/CRITICAL. » | `Dockerfile` (lignes 15–27) + Trivy log CI |
+| 0:00–0:35 | 35 s | **A** | **Intro** : « Music Hall — service d'ingestion et d'analyse de logs sécurisé. FastAPI + PostgreSQL + LLM (OpenAI/Ollama/Fake). DevSecOps natif : secrets, scans, CI. » | Écran titre + architecture (1 slide) |
+| 0:35–1:10 | 35 s | **B** | **Architecture & Sécurité conteneur** : « Base python:3.11-slim, user non-root, read-only fs, cap_drop ALL, Trivy intégré au build. 0 CVE HIGH/CRITICAL. » | `Dockerfile` (lignes 15–27) + Trivy log CI |
 | 1:10–1:50 | 40 s | **A** | **Secrets & Config** : « Aucun secret en dur. .env pour dev, Docker Secrets (fichiers chmod 400) pour prod, Vault optionnel. Démo : `./scripts/init-docker-secrets.sh` génère 4 secrets. » | Terminal : script + `ls -la secrets/` |
 | 1:50–2:30 | 40 s | **B** | **CI Pipeline** : « GitHub Actions : tests → build → Trivy (SARIF → GitHub Security) → Snyk deps + code. Échec si HIGH+. Secrets CI : SNYK_TOKEN. » | `.github/workflows/ci.yml` (30 lignes) |
 | 2:30–3:10 | 40 s | **A** | **Démo live — Créer un log** : `curl -X POST /logs -d '{"message":"DB connection timeout","level":"ERROR","source":"api"}'` → 201. | Terminal curl + réponse JSON |
 | 3:10–3:50 | 40 s | **B** | **Démo live — Analyser avec IA (FakeProvider)** : `curl -X POST /logs/1/analyze` → severity LOW, category TEST, summary, recommendations. « Provider pluggable : `LLM_PROVIDER=fake|ollama|openai`. » | Terminal curl + JSON résultat |
-| 3:50–4:20 | 30 s | **A** | **Démo live — Filtres & Health** : `GET /logs?level=ERROR&limit=5` + `GET /health` → `{"status":"ok","database":"up"}`. | Terminal |
-| 4:20–4:50 | 30 s | **B** | **Tests offline & Quality Gate** : « `TESTING=1` → SQLite mémoire, FakeProvider, 0 dépendance externe. `pytest -v` : 4 tests passent en <2 s. Quality gate : tests + Trivy + Snyk. » | `pytest -v` output |
-| 4:50–5:20 | 30 s | **A** | **Prod & Vault** : « `docker-compose.production.yml` : secrets montés, ressources limitées, restart policy. Vault optionnel : agent sidecar, rotation centralisée. » | `docker-compose.production.yml` (extrait) |
-| 5:20–5:50 | 30 s | **B** | **DoD & Versioning** : « DoD : tests + Trivy 0 HIGH/CRIT + Snyk 0 HIGH + secrets OK + health check + rollback testé. SemVer + GitFlow : main=prod, develop=CI, tags vX.Y.Z. » | Checklist DoD (slide) |
+| 3:50–4:15 | 25 s | **A** | **Démo live — Filtres & Health** : `GET /logs?level=ERROR&limit=5` + `GET /health` → `{"status":"ok","database":"up"}`. | Terminal |
+| 4:15–4:50 | 35 s | **B** | **Tests offline & Quality Gate** : « `TESTING=1` → SQLite mémoire, FakeProvider, 0 dépendance externe. `pytest -v` : 16 tests passent en <2 s. Quality gate : tests + Trivy + Snyk. » | `pytest -v` output |
+| 4:50–5:25 | 35 s | **A** | **Prod & Vault** : « `docker-compose.production.yml` : secrets montés, ressources limitées, restart policy. Vault optionnel : agent sidecar, rotation centralisée. » | `docker-compose.production.yml` (extrait) |
+| 5:25–5:50 | 25 s | **B** | **DoD & Versioning** : « DoD : tests + Trivy 0 HIGH/CRIT + Snyk 0 HIGH + secrets OK + health check + rollback testé. SemVer + GitFlow : main=prod, develop=CI, tags vX.Y.Z. » | Checklist DoD (slide) |
 | 5:50–6:00 | 10 s | **A+B** | **Closing** (ensemble) : « Music Hall — prêt production, sécurisé by design, observable, extensible. Questions ? » | Slide contact / QR repo |
 
 ---
@@ -51,6 +51,79 @@ curl -X GET http://localhost:5000/analyses
 
 ---
 
+## Plan de secours sans IA et sans Docker (Fallback minimal)
+
+Si Docker et/ou les services IA sont totalement indisponibles, la démo peut être réalisée en local avec Python uniquement.
+
+### Sans Docker — Démarrage direct
+
+```bash
+# Installer les dépendances
+pip install -r requirements.txt
+
+# Lancer l'API directement (port 5000)
+LLM_PROVIDER=fake TESTING=1 uvicorn app:app --host 0.0.0.0 --port 5000
+```
+
+> Dans un autre terminal : `curl http://localhost:5000/health` → `{"status":"ok","database":"up"}` (SQLite mémoire grâce à `TESTING=1`).
+
+### Sans IA — Fournisseur factice garanti
+
+Le paramètre `LLM_PROVIDER=fake` est le défaut. Aucune requête réseau vers OpenAI ou Ollama n'est effectuée. L'analyse de logs retourne un résultat déterministe (severity LOW, recommendations list).
+
+```bash
+# Vérifier le provider actif
+echo $LLM_PROVIDER
+
+# Démo d'analyse sans IA réelle
+curl -X POST http://localhost:5000/logs -H "Content-Type: application/json" \
+  -d '{"message":"Connection timeout","level":"ERROR","source":"api"}'
+curl -X POST http://localhost:5000/logs/1/analyze
+```
+
+### Sans PostgreSQL — Base SQLite en mémoire
+
+Avec `TESTING=1`, l'utilisation de la base de données passe automatiquement en SQLite en mémoire. Aucune base PostgreSQL requise.
+
+```bash
+TESTING=1 LLM_PROVIDER=fake uvicorn app:app --host 0.0.0.0 --port 5000
+```
+
+### Sans Docker et sans IA — Démo minimale complète
+
+```bash
+# 1. Installer
+pip install -r requirements.txt
+
+# 2. Lancer (SQLite + FakeProvider, zéro réseau)
+TESTING=1 LLM_PROVIDER=fake uvicorn app:app --host 0.0.0.0 --port 5000 &
+
+# 3. Santé
+curl http://localhost:5000/health
+
+# 4. Créer un log
+curl -X POST http://localhost:5000/logs -H "Content-Type: application/json" \
+  -d '{"message":"Disk almost full","level":"WARNING","source":"server"}'
+
+# 5. Analyser (FakeProvider)
+curl -X POST http://localhost:5000/logs/1/analyze
+
+# 6. Lister les logs
+curl "http://localhost:5000/logs?level=WARNING&limit=5"
+
+# 7. Lister les analyses
+curl http://localhost:5000/analyses
+
+# 8. Tests
+pytest -v
+```
+
+| Scénario | Déclencheur | Message au jury |
+|----------|-------------|-----------------|
+| **Tout en local** | Environnement sans Docker ni IA | « La logique métier et les tests fonctionnent sans infrastructure lourde. Docker et l'IA sont des couches d'exécution, pas des dépendances fonctionnelles. » |
+
+---
+
 ## Critères de réussite (Definition of Demo Success)
 
 | Critère | Validé si |
@@ -71,23 +144,23 @@ curl -X GET http://localhost:5000/analyses
 ### Orateur A — Produit & Démo (3 min)
 | Segment | Temps | Contenu clé |
 |---------|-------|-------------|
-| Intro | 0:30 | Pitch produit + valeur |
-| Secrets/Config | 0:40 | .env → Docker Secrets → Vault |
+| Intro | 0:35 | Pitch produit + valeur |
+| Secrets & Config | 0:40 | .env → Docker Secrets → Vault |
 | Live: Créer log | 0:40 | `POST /logs` |
-| Live: Analyser (Fake) | 0:40 | `POST /logs/1/analyze` |
-| Live: Filtres + Health | 0:30 | `GET /logs?...` + `/health` |
-| Prod & Vault | 0:30 | production.yml + Vault sidecar |
-| Closing | 0:10 | Call to action |
+| Live: Filtres & Health | 0:25 | `GET /logs?...` + `/health` |
+| Prod & Vault | 0:35 | production.yml + Vault sidecar |
+| Closing (avec B) | 0:05 | Call to action |
 | **Total** | **3:00** | |
 
 ### Orateur B — Tech & Sécurité (3 min)
 | Segment | Temps | Contenu clé |
 |---------|-------|-------------|
-| Arché + Sécurité conteneur | 0:40 | Dockerfile hardening, Trivy build |
+| Arché & Sécurité conteneur | 0:35 | Dockerfile hardening, Trivy build |
 | CI Pipeline | 0:40 | Tests → Build → Trivy → Snyk |
-| Tests offline + Quality Gate | 0:30 | `TESTING=1`, FakeProvider, pytest |
-| DoD + Versioning | 0:30 | Checklist + SemVer/GitFlow |
-| Closing (avec A) | 0:10 | Ensemble |
+| Live: Analyser (Fake) | 0:40 | `POST /logs/1/analyze` |
+| Tests offline + Quality Gate | 0:35 | `TESTING=1`, FakeProvider, pytest |
+| DoD & Versioning | 0:25 | Checklist + SemVer/GitFlow |
+| Closing (avec A) | 0:05 | Ensemble |
 | **Total** | **3:00** | |
 
 ---
@@ -97,7 +170,7 @@ curl -X GET http://localhost:5000/analyses
 - [ ] `docker compose up -d --build` : tout vert (web + db healthy)
 - [ ] `curl /health` → `{"status":"ok","database":"up"}`
 - [ ] `curl POST /logs` → 201, `POST /logs/1/analyze` → 201 (FakeProvider)
-- [ ] `pytest -v` : 4 passed en <3 s
+- [ ] `pytest -v` : 16 passed en <3 s
 - [ ] `docker compose -f compose.yaml -f docker-compose.production.yml config` : valide
 - [ ] `trivy image music-hall:latest` : 0 HIGH/CRITICAL
 - [ ] Slides/écrans prêts : architecture, Dockerfile, CI, DoD, versioning

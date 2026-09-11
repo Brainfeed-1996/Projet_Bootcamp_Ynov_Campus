@@ -4,6 +4,7 @@
 # Fichiers d'environnement et secrets
 .env
 .env.production
+.env.local
 *.env
 secrets/
 
@@ -20,6 +21,9 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
 
 # Fichiers de base de données
 *.sqlite
@@ -36,6 +40,8 @@ docs/
 # Fichiers de configuration Docker
 docker-compose*.yml
 docker-compose*.yaml
+Dockerfile*
+.dockerignore
 
 # Fichiers de logs
 *.log
@@ -61,6 +67,17 @@ tests/
 # Fichiers de configuration locaux
 *.local
 *.development
+
+# Artefacts de build
+dist/
+build/
+*.egg-info/
+pip-wheel-metadata/
+
+# Fichiers de cache divers
+.cache/
+.parcel-cache/
+.eslintcache
 
 # ---
 # Note : Les fichiers Dockerfile, compose.yaml, requirements.txt,
