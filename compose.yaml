@@ -1,0 +1,85 @@
+# compose.yaml - Configuration de développement
+# Secrets : utiliser un fichier .env local pour le développement
+# En production, utiliser docker-compose.production.yml avec des secrets Docker
+services:
+  web:
+    build:
+      context: .
+      target: production
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    secrets:
+      - db_password
+      - secret_key
+      - postgres_user
+      - postgres_password
+    environment:
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - DB_USER_FILE=/run/secrets/postgres_user
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=music_hall
+      - POSTGRES_USER_FILE=/run/secrets/postgres_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+    # Limites de ressources pour le développement
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: music_hall
+    secrets:
+      - postgres_user
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "sh", "-c", "pg_isready -U \"$$(cat /run/secrets/postgres_user)\" -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    read_only: false
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  secret_key:
+    file: ./secrets/secret_key.txt
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+volumes:
+  postgres_data:
+
+# ---
+# Limites :
+# - Aucune valeur par défaut pour les secrets (sécurité)
+# - Les secrets sont montés via le driver de secrets Docker
+# - Le filesystem du service web est read_only
+# - L'utilisateur est non-root (voir Dockerfile)
+# - Fichier .env requis pour le développement
+# ---

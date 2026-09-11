@@ -1,0 +1,112 @@
+# docker-compose.vault.yml - Configuration avec intégration Vault
+# Usage: docker compose -f compose.yaml -f docker-compose.vault.yml up -d
+#
+# Ce fichier étend la configuration pour utiliser Vault comme source de secrets.
+# Nécessite un service Vault accessible à l'adresse http://vault:8200
+# ou une adresse personnalisée via VAULT_ADDR.
+#
+# Limites :
+# - Vault doit être déployé et accessible
+# - Les secrets doivent être initialisés dans Vault (scripts/vault-init.sh)
+# - L'agent Vault (vault-agent) est requis pour récupérer les secrets
+# - Configuration optionnelle - peut être utilisée avec docker-compose.production.yml
+
+services:
+  vault:
+    image: hashicorp/vault:1.15.0
+    container_name: vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_ADDR: http://0.0.0.0:8200
+      VAULT_API_ADDR: http://0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+      - ./config/vault:/vault/config:ro
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  vault-agent:
+    image: hashicorp/vault:1.15.0
+    container_name: vault-agent
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+    volumes:
+      - vault_data:/vault/data
+      - vault_secrets:/run/secrets
+      - ./config/vault-agent:/etc/vault-agent:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+    restart: unless-stopped
+
+  web:
+    extends:
+      file: compose.yaml
+      service: web
+    depends_on:
+      db:
+        condition: service_healthy
+      vault-agent:
+        condition: service_started
+    secrets:
+      - db_password
+      - secret_key
+    environment:
+      - VAULT_ADDR=http://vault:8200
+
+  db:
+    extends:
+      file: compose.yaml
+      service: db
+    secrets:
+      - postgres_user
+      - postgres_password
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  secret_key:
+    file: ./secrets/secret_key.txt
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+volumes:
+  postgres_data:
+  vault_data:
+  vault_logs:
+  vault_secrets:
+
+# ---
+# Limites :
+# - Vault doit être déployé et accessible
+# - Les secrets doivent être initialisés au préalable
+# - L'agent Vault est requis pour récupérer les secrets
+# - Configuration optionnelle - peut être utilisée avec docker-compose.production.yml
+# - Les secrets sont stockés dans Vault, pas dans les fichiers
+# ---

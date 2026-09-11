@@ -1,0 +1,104 @@
+# docker-compose.production.yml - Configuration de production sécurisée
+# Usage: docker compose -f compose.yaml -f docker-compose.production.yml up -d
+#
+# Limites :
+# - AUCUNE valeur par défaut pour les secrets (échec si non définis)
+# - Les secrets doivent être créés au préalable avec scripts/init-docker-secrets.sh
+# - Le filesystem est montné read_only
+# - L'utilisateur est non-root (UID 1000)
+# - Les ressources sont limitées
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    ports:
+      - "80:80"
+    env_file:
+      - .env.production
+    secrets:
+      - db_password
+      - secret_key
+      - postgres_user
+      - postgres_password
+    environment:
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - DB_USER_FILE=/run/secrets/postgres_user
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=music_hall
+    depends_on:
+      db:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/tmp
+      - /app/.flask
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER_FILE: /run/secrets/postgres_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: music_hall
+    secrets:
+      - postgres_user
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "sh", "-c", "pg_isready -U \"$$(cat /run/secrets/postgres_user)\" -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    read_only: false
+    deploy:
+      resources:
+        limits:
+          cpus: '1.00'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  secret_key:
+    file: ./secrets/secret_key.txt
+  postgres_user:
+    file: ./secrets/postgres_user.txt
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+
+volumes:
+  postgres_data:
+
+# ---
+# Limites :
+# - Les secrets doivent être créés avant le déploiement
+# - Aucun fallback ou valeur par défaut pour les mots de passe
+# - Les conteneurs ont des capacités réduites (cap_drop ALL)
+# - Le filesystem est read_only pour le service web
+# - Les ressources sont limitées pour éviter les débordements
+# ---

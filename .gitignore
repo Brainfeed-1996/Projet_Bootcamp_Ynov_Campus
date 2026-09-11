@@ -1,0 +1,11 @@
+.env
+.env.production
+secrets/
+*.sqlite
+__pycache__/
+.pytest_cache/
+*.pdf
+*.pyc
+.coverage
+htmlcov/
+data/
