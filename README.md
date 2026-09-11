@@ -2,7 +2,7 @@
 
 API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un cours **DevSecOps** (Ynov — Défensive).
 
-**Version** : `v1.0.0`  
+**Version** : `v1.1.0`  
 **Stack** : Python 3.11+, FastAPI, PostgreSQL, Docker, Docker Compose, Trivy, Vault (optionnel).
 
 ---
@@ -160,7 +160,7 @@ Consultez `DEMO_DAY.md` pour le support de démonstration :
 - [x] Projet repart sur une machine propre avec `git clone`, `./scripts/init-docker-secrets.sh`, `docker compose up`.
 - [x] Tests automatisés passent sans accès à une vraie IA ni à PostgreSQL.
 - [x] Jeu de démonstration tient en six minutes et la parole est répartie à 50/50.
-- [x] Code versionné et tagué `v1.0.0`.
+- [x] Code versionné et tagué `v1.1.0` (depuis `v1.0.0`).
 - [x] Documentation finale et support Demo Day fournis.
 - [x] Secrets exclus de Git et de l'image Docker.
 - [x] Fournisseurs IA validés sans réseau et avec erreurs explicites.
