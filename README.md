@@ -247,3 +247,10 @@ docker compose logs -f db
 rm -f test.sqlite test.sqlite-shm test.sqlite-wal
 pytest -v
 ```
+
+## Rate Limiting
+
+L'API utilise un rate limiting pour protéger contre les abus :
+- Authentification : 10 tentatives/minute
+- Création de logs : 50/minute
+- Analyse IA : 30/minute
