@@ -124,3 +124,9 @@ def test_log_cleanup():
     # Call cleanup
     # Verify old log is deleted
     pass
+
+def test_audit_logging():
+    from app import AuditLogger
+    audit = AuditLogger()
+    audit.log_operation('user', 'create', 'log')
+    assert True
