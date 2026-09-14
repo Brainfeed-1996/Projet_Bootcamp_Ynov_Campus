@@ -50,3 +50,15 @@ def test_concurrent_log_creation(client):
         )
         responses.append(resp.status_code)
     assert all(code == 201 for code in responses)
+def test_concurrent_requests(client):
+    import threading
+    results = []
+    def make_request():
+        resp = client.get('/health')
+        results.append(resp.status_code)
+    threads = [threading.Thread(target=make_request) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert all(code == 200 for code in results)
