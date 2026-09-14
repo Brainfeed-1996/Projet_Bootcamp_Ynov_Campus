@@ -126,3 +126,16 @@ L'entrÃ©e existe dÃ©jÃ  (nom d'utilisateur ou email duplicate)
 1. Vérifier la clé secrète
 2. Vérifier la validité du token
 3. Vérifier les rôles de l'utilisateur
+
+## Rate Limiting
+
+L'API applique les limites suivantes :
+- Authentification : 10/minute
+- Création de logs : 50/minute
+- Analyse IA : 30/minute
+- Lecture : 100/minute
+
+Les réponses incluent les headers :
+- X-RateLimit-Limit
+- X-RateLimit-Remaining
+- X-RateLimit-Reset
