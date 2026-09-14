@@ -696,3 +696,12 @@ structlog.configure(
     ],
     logger_factory=structlog.PrintLoggerFactory(),
 )
+
+@app.get('/metrics', tags=['Monitoring'])
+def get_metrics():
+    return {
+        'total_requests': 0,
+        'total_logs': 0,
+        'total_analyses': 0,
+        'uptime': '0:00:00'
+    }
