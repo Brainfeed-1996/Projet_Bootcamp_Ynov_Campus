@@ -150,3 +150,11 @@ secrets:
       - backups:/backup
     depends_on:
       - db
+
+  loki:
+    image: grafana/loki:2.9
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    command: -config.file=/etc/loki/config.yaml
