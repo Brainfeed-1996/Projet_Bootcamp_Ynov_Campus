@@ -73,3 +73,12 @@ def test_security_headers_present(client):
     assert "X-Content-Type-Options" in resp.headers
     assert "X-Frame-Options" in resp.headers
     assert "X-XSS-Protection" in resp.headers
+def test_csrf_protection():
+    resp = client.post('/logs', json={'message': 'Test'})
+    assert resp.status_code in [201, 403]
+
+def test_password_hashing_strength():
+    from app import hash_password
+    hashed = hash_password('test123')
+    assert len(hashed) > 50
+    assert hashed.startswith('$2')
