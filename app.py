@@ -741,3 +741,9 @@ from functools import lru_cache
 def get_user_by_username(username: str):
     # Cache user lookups
     pass
+
+# Stream CSV parsing for large files
+def parse_csv_stream(file_content: str):
+    reader = csv.DictReader(file_content.splitlines())
+    for row in reader:
+        yield row
