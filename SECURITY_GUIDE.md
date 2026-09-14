@@ -130,3 +130,14 @@ psql -h db music_hall < backup.sql
 - Quotidienne : 3h du matin
 - Hebdomadaire : Dimanche 2h
 - Mensuelle : Premier du mois
+
+## Rétention des Données
+
+| Type de données | Durée de rétention |
+|-----------------|-------------------|
+| Logs | 90 jours |
+| Analyses | 90 jours |
+| Utilisateurs | 365 jours |
+| Logs d'audit | 7 ans |
+
+Les données sont supprimées automatiquement après la période.
