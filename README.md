@@ -298,3 +298,11 @@ L'API utilise un rate limiting pour protéger contre les abus :
 - `test` : Tests
 - `refactor` : Refactoring
 - `chore` : Maintenance
+
+## Versioning
+
+L'API utilise le versioning par URL :
+- `/api/v1/` : Version actuelle
+- `/api/v2/` : Version future (développement)
+
+La version est indiquée dans le schéma OpenAPI.
