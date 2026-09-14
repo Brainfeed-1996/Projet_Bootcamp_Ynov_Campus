@@ -149,3 +149,15 @@ Les données sont supprimées automatiquement après la période.
 3. **Éradication** : Suppression de la menace
 4. **Restauration** : Retour à la normale
 5. **Amélioration** : Revue post-incident
+
+## Agrégation des Logs
+
+L'API envoie les logs vers Loki pour :
+- Centralisation
+- Recherche full-text
+- Visualisation (Grafana)
+- Détection d'anomalies
+
+Configuration :
+- URL Loki : http://loki:3100
+- Labels : level, source, category
