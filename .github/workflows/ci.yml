@@ -206,3 +206,9 @@ jobs:
           curl -f http://localhost:5000/metrics || exit 1
           # Verify health endpoint
           curl -f http://localhost:5000/health || exit 1
+
+      - name: Test data export
+        run: |
+          pytest tests/test_export.py -v
+          # Verify export functionality
+          curl -f http://localhost:5000/export/logs || exit 1
