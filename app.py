@@ -869,3 +869,18 @@ def export_logs(format: str = 'json', db: Session = Depends(get_db)):
         # Export as CSV
         pass
     return {'logs': [log.__dict__ for log in logs]}
+
+# Cleanup service
+class CleanupService:
+    def __init__(self, db: Session):
+        self.db = db
+    
+    def cleanup_old_logs(self, days: int = 90):
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        self.db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
+        self.db.commit()
+    
+    def cleanup_old_analyses(self, days: int = 90):
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        self.db.execute(Analysis.__table__.delete().where(Analysis.created_at < cutoff))
+        self.db.commit()
