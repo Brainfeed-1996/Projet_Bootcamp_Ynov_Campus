@@ -662,3 +662,7 @@ def validate_log_level(level: str) -> bool:
 
 def validate_severity(severity: str) -> bool:
     return severity.upper() in VALID_SEVERITIES
+
+# Enhanced error handling for bulk operations
+def handle_bulk_error(error: Exception, line_number: int) -> str:
+    return f'Line {line_number}: {str(error)}'
