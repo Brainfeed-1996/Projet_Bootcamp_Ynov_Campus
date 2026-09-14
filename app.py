@@ -3,19 +3,25 @@ import csv
 import json
 import logging
 import os
+import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, Form, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import JSONResponse, Response
+from jose import jwt, JWTError
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -40,14 +46,28 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Configuration constants
-MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10 MB
-MAX_BULK_ITEMS = 10000  # Maximum items in bulk ingest
+SECRET_KEY = os.environ.get("SECRET_KEY", "default-secret-key-change-me")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+MAX_REQUEST_SIZE = 10 * 1024 * 1024
+MAX_BULK_ITEMS = 10000
+
+RATE_LIMIT_DEFAULT = "100/minute"
+RATE_LIMIT_AUTH = "10/minute"
+RATE_LIMIT_LOGS_WRITE = "50/minute"
+RATE_LIMIT_ANALYZE = "30/minute"
+
+SENSITIVE_PATTERNS = [
+    (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), '[IP_REDACTED]'),
+    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), '[EMAIL_REDACTED]'),
+    (re.compile(r'\b(?:password|passwd|pwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*\S+', re.IGNORECASE), '[CREDENTIAL_REDACTED]'),
+    (re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'), '[CARD_REDACTED]'),
+    (re.compile(r'\b[A-Za-z0-9+/=]{40,}\b'), '[TOKEN_REDACTED]'),
+]
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    """Middleware to limit request body size and prevent unbounded memory usage."""
-
     async def dispatch(self, request: StarletteRequest, call_next):
         content_length = request.headers.get("content-length")
         if content_length:
@@ -60,10 +80,18 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     )
             except ValueError:
                 pass
-
-        # For streaming requests, we can't easily check size upfront
-        # but we'll enforce limits in the endpoint logic
         return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"
+        return response
 
 
 def _read_secret_from_file(env_var: str, file_env_var: str, default: str = "") -> str:
