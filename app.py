@@ -718,3 +718,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 # Use 12 rounds for bcrypt (default is 10)
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
+
+import html
+
+def sanitize_html(content: str) -> str:
+    return html.escape(content, quote=True)
