@@ -812,3 +812,12 @@ from opentelemetry import trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 
 tracer = trace.get_tracer(__name__)
+
+@app.get('/health/detailed', tags=['Monitoring'])
+def detailed_health():
+    checks = {
+        'database': check_db(),
+        'openai': check_openai(),
+        'ollama': check_ollama(),
+    }
+    return {'status': 'ok' if all(checks.values()) else 'degraded', 'checks': checks}
