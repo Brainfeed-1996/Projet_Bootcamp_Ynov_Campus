@@ -27,3 +27,14 @@ def test_fake_provider_handles_empty_message():
     provider = FakeLLMProvider()
     result = provider.analyze("")
     assert result.severity in ("LOW", "MEDIUM", "HIGH", "CRITICAL")
+def test_openai_provider_mock():
+    from unittest.mock import Mock, patch
+    with patch('providers.openai_provider.OpenAI'):
+        provider = OpenAILLMProvider()
+        assert provider is not None
+
+def test_ollama_provider_mock():
+    from unittest.mock import Mock, patch
+    with patch('providers.ollama_provider.Client'):
+        provider = OllamaLLMProvider()
+        assert provider is not None
