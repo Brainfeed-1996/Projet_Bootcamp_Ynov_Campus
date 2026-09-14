@@ -69,3 +69,11 @@ def test_bulk_too_many_items(client):
     large_payload = [{"message": f"Log {i}"} for i in range(10001)]
     resp = client.post("/logs/bulk", json=large_payload)
     assert resp.status_code == 400
+def test_bulk_ingest_empty_payload():
+    resp = client.post('/logs/bulk', json=[])
+    assert resp.status_code == 200
+    assert resp.json()['ingested'] == 0
+
+def test_bulk_ingest_malformed_json():
+    resp = client.post('/logs/bulk', json={'not': 'a list'})
+    assert resp.status_code == 400
