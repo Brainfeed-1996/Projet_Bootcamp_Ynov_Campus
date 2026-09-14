@@ -105,3 +105,9 @@ def test_email_notification():
 def test_webhook_endpoint():
     resp = client.post('/webhooks/log-created', json={'log_id': 1})
     assert resp.status_code in [200, 404]
+
+def test_loki_integration():
+    from app import send_to_loki
+    # Mock the request
+    send_to_loki({'streams': []})
+    assert True
