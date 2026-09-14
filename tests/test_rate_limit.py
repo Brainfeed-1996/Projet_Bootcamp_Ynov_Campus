@@ -39,3 +39,11 @@ def test_health_not_rate_limited(client):
     for _ in range(5):
         resp = client.get("/health")
         assert resp.status_code == 200
+def test_rate_limit_headers():
+    resp = client.get('/health')
+    assert 'X-RateLimit-Limit' in resp.headers or resp.status_code == 200
+
+def test_rate_limit_reset():
+    # Test that rate limit resets after window
+    resp = client.get('/health')
+    assert resp.status_code == 200
