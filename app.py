@@ -784,3 +784,12 @@ class EmailService:
         msg['To'] = to
         with smtplib.SMTP(self.smtp_server, self.port) as server:
             server.send_message(msg)
+
+def validate_configuration():
+    required_vars = ['SECRET_KEY', 'DATABASE_URL']
+    missing = [var for var in required_vars if not os.environ.get(var)]
+    if missing:
+        raise RuntimeError(f'Missing required environment variables: {missing}')
+
+# Validate on startup
+validate_configuration()
