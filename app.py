@@ -884,3 +884,18 @@ class CleanupService:
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         self.db.execute(Analysis.__table__.delete().where(Analysis.created_at < cutoff))
         self.db.commit()
+
+# Batch audit logging
+class BatchAuditLogger:
+    def __init__(self, batch_size: int = 100):
+        self.batch_size = batch_size
+        self.batch = []
+    
+    def add(self, entry: dict):
+        self.batch.append(entry)
+        if len(self.batch) >= self.batch_size:
+            self.flush()
+    
+    def flush(self):
+        # Write batch to storage
+        self.batch = []
