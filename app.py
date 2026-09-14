@@ -821,3 +821,16 @@ def detailed_health():
         'ollama': check_ollama(),
     }
     return {'status': 'ok' if all(checks.values()) else 'degraded', 'checks': checks}
+
+# Observability module
+class Observability:
+    def __init__(self):
+        self.tracer = trace.get_tracer(__name__)
+    
+    def log_request(self, method: str, path: str, status_code: int):
+        with self.tracer.start_as_current_span('request'):
+            pass
+    
+    def log_error(self, error: Exception):
+        with self.tracer.start_as_current_span('error'):
+            pass
