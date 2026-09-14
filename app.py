@@ -685,3 +685,14 @@ def add_request_id_middleware(request, call_next):
     response = await call_next(request)
     response.headers['X-Request-ID'] = request_id
     return response
+
+import structlog
+
+# Configure structured logging
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt='iso'),
+        structlog.processors.JSONRenderer()
+    ],
+    logger_factory=structlog.PrintLoggerFactory(),
+)
