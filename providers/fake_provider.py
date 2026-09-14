@@ -11,4 +11,5 @@ class FakeLLMProvider(LLMProvider):
             category="TEST",
             summary="Fake analysis for testing purposes",
             recommendations=["Verify the log context", "Check related events"],
+            provider="fake",
         )

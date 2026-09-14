@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 from schemas.analysis import AnalysisResult
 
 ALLOWED_SEVERITIES = frozenset({"LOW", "MEDIUM", "HIGH", "CRITICAL"})
-ANALYSIS_FIELDS = frozenset({"severity", "category", "summary", "recommendations"})
+ANALYSIS_FIELDS = frozenset({"severity", "category", "summary", "recommendations", "provider"})
 DEFAULT_OPENAI_TIMEOUT = 30.0
 DEFAULT_OLLAMA_TIMEOUT = 60.0
 MAX_LOG_MESSAGE_LENGTH = 1_000_000
@@ -19,6 +19,7 @@ MAX_CATEGORY_LENGTH = 200
 MAX_SUMMARY_LENGTH = 4_096
 MAX_RECOMMENDATIONS = 20
 MAX_RECOMMENDATION_LENGTH = 1_000
+ALLOWED_PROVIDERS = frozenset({"openai", "ollama", "fake"})
 
 
 class ProviderError(Exception):
@@ -148,7 +149,7 @@ def _normalize_text(value: Any, field: str, maximum: int) -> str:
     return normalized
 
 
-def normalize_analysis_payload(payload: Any) -> AnalysisResult:
+def normalize_analysis_payload(payload: Any, provider: str | None = None) -> AnalysisResult:
     if not isinstance(payload, Mapping):
         raise ProviderResponseError("LLM response must be a JSON object")
 
@@ -187,6 +188,14 @@ def normalize_analysis_payload(payload: Any) -> AnalysisResult:
         for index, item in enumerate(recommendations)
     ]
 
+    provider_value = provider
+    if "provider" in payload:
+        provider_value = _normalize_text(payload["provider"], "provider", MAX_CATEGORY_LENGTH).lower()
+        if provider_value not in ALLOWED_PROVIDERS:
+            raise ProviderResponseError(
+                f"LLM response field 'provider' must be one of: {', '.join(sorted(ALLOWED_PROVIDERS))}"
+            )
+
     normalized = {
         "severity": severity,
         "category": _normalize_text(
@@ -194,12 +203,13 @@ def normalize_analysis_payload(payload: Any) -> AnalysisResult:
         ),
         "summary": _normalize_text(payload["summary"], "summary", MAX_SUMMARY_LENGTH),
         "recommendations": normalized_recommendations,
+        "provider": provider_value or "unknown",
     }
     return AnalysisResult(**normalized)
 
 
 def parse_analysis_response(
-    content: Any, source: str = "LLM response"
+    content: Any, source: str = "LLM response", provider: str | None = None
 ) -> AnalysisResult:
     if isinstance(content, bytes):
         try:
@@ -223,7 +233,7 @@ def parse_analysis_response(
     except (json.JSONDecodeError, TypeError, ValueError):
         raise ProviderResponseError(f"{source} is not valid JSON") from None
 
-    return normalize_analysis_payload(payload)
+    return normalize_analysis_payload(payload, provider)
 
 
 class LLMProvider(ABC):
