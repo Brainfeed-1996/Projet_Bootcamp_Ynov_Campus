@@ -758,3 +758,11 @@ def send_alert_email(to_email: str, subject: str, body: str):
     # Send via SMTP
     with smtplib.SMTP('localhost') as server:
         server.send_message(msg)
+
+API_KEYS = {
+    'service_a': 'key123',
+    'service_b': 'key456',
+}
+
+def validate_api_key(api_key: str) -> bool:
+    return api_key in API_KEYS.values()
