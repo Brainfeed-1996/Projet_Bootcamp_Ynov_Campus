@@ -899,3 +899,13 @@ class BatchAuditLogger:
     def flush(self):
         # Write batch to storage
         self.batch = []
+
+# Memory-efficient exports
+def stream_logs_as_csv(db: Session):
+    def generate():
+        writer = csv.writer(StringIO())
+        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
+        for log in db.execute(select(Log)).scalars():
+            writer.writerow([log.id, log.level, log.message, log.source, log.created_at])
+            yield writer.getvalue()
+    return StreamingResponse(generate(), media_type='text/csv')
