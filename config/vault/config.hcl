@@ -27,3 +27,13 @@ path "dynamic/db-credentials/music-hall" {
     max_ttl = "24h"
   }
 }
+
+# Enable audit logging
+path "/sys/audit" {
+  capabilities = ["create", "update"]
+}
+
+# Audit device configuration
+audit_device file {
+  file_path = "/var/log/vault_audit.log"
+}
