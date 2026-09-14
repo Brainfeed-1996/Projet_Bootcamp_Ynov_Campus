@@ -840,3 +840,10 @@ def process_batch(items: list, batch_size: int = 100):
     for i in range(0, len(items), batch_size):
         batch = items[i:i+batch_size]
         yield batch
+
+# Memory-efficient bulk operations
+def bulk_insert_logs(db, logs: list, batch_size: int = 1000):
+    for i in range(0, len(logs), batch_size):
+        batch = logs[i:i+batch_size]
+        db.bulk_save_objects(batch)
+        db.commit()
