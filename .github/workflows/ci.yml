@@ -167,3 +167,8 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
+      - name: Security scan
+        run: |
+          pip install bandit safety
+          bandit -r app.py -f json
+          safety check -r requirements.txt
