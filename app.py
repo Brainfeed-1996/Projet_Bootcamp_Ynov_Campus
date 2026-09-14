@@ -723,3 +723,14 @@ import html
 
 def sanitize_html(content: str) -> str:
     return html.escape(content, quote=True)
+
+from sqlalchemy.pool import QueuePool
+
+# Configure connection pool
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=10,
+    max_overflow=20,
+    pool_pre_ping=True,
+)
