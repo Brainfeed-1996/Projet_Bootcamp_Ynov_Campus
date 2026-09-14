@@ -37,3 +37,14 @@ path "/sys/audit" {
 audit_device file {
   file_path = "/var/log/vault_audit.log"
 }
+
+# Audit logging policies
+path "sys/audit" {
+  capabilities = ["create", "update"]
+}
+
+# Audit device
+audit_device file {
+  file_path = "/var/log/vault_audit.log"
+  description = "File audit device"
+}
