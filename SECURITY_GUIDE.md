@@ -101,3 +101,15 @@ semgrep --config=auto app.py
 | X-XSS-Protection | 1; mode=block | Protection XSS |
 | Referrer-Policy | strict-origin-when-cross-origin | Politique de referral |
 | Content-Security-Policy | default-src 'self' | Politique CSP |
+
+## Monitoring
+
+### Métriques clés
+- Taux d'erreurs : < 1%
+- Latence P99 : < 200ms
+- Disponibilité : > 99.9%
+
+### Alertes configurées
+- Erreurs 500 : Immédiate
+- Latence élevée : 5 minutes
+- Base de données lente : 2 minutes
