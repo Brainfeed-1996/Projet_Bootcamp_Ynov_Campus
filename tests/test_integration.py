@@ -80,3 +80,10 @@ def test_error_handling_consistency(client):
     resp3 = client.get("/logs")
     assert resp3.status_code == 401
     assert "detail" in resp3.json()
+def test_database_transaction_rollback():
+    # Test that failed operations rollback correctly
+    initial_count = client.get('/logs').json().__len__()
+    resp = client.post('/logs', json={'message': 'Test'})
+    assert resp.status_code == 201
+    final_count = client.get('/logs').json().__len__()
+    assert final_count == initial_count + 1
