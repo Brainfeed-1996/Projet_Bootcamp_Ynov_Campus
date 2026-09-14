@@ -83,3 +83,11 @@ semgrep --config=auto app.py
 2. VÃ©rifier les logs d'accÃ¨s
 3. Auditer les permissions des utilisateurs
 4. ContrÃ´ler la configuration Vault
+## Checklist de Déploiement
+
+- [ ] Mettre à jour les dépendances
+- [ ] Exécuter les tests de sécurité
+- [ ] Configurer les variables d'environnement
+- [ ] Vérifier les permissions Vault
+- [ ] Sauvegarder la base de données
+- [ ] Surveiller les logs post-déploiement
