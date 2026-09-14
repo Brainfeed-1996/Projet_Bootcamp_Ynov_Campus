@@ -306,3 +306,15 @@ L'API utilise le versioning par URL :
 - `/api/v2/` : Version future (développement)
 
 La version est indiquée dans le schéma OpenAPI.
+
+## Observabilité
+
+### Stack
+- **Logs** : Loki + Grafana
+- **Metrics** : Prometheus + Grafana
+- **Tracing** : Jaeger
+- **Alerting** : Alertmanager
+
+### Dashboard
+- Disponibile à http://grafana:3000
+- Identifiants : admin/admin
