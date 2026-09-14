@@ -34,3 +34,10 @@ template {
   destination = "/run/secrets/postgres_password.txt"
   contents = "{{ with secret \"secret/music-hall\" }}{{ .Data.data.postgres_password }}{{ end }}"
 }
+retry {
+  attempts = 5
+  backoff {
+    duration = "5s"
+    max_duration = "60s"
+  }
+}
