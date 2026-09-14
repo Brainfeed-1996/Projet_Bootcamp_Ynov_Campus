@@ -31,3 +31,7 @@ def test_root_redirect(client):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+def test_detailed_health():
+    resp = client.get('/health/detailed')
+    assert resp.status_code == 200
+    assert 'checks' in resp.json()
