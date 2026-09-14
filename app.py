@@ -734,3 +734,10 @@ engine = create_engine(
     max_overflow=20,
     pool_pre_ping=True,
 )
+
+from functools import lru_cache
+
+@lru_cache(maxsize=100)
+def get_user_by_username(username: str):
+    # Cache user lookups
+    pass
