@@ -806,3 +806,9 @@ import requests
 def send_to_loki(log_entry: dict):
     headers = {'Content-Type': 'application/json'}
     requests.post('http://loki:3100/loki/api/v1/push', json=log_entry, headers=headers)
+
+# Jaeger tracing
+from opentelemetry import trace
+from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+
+tracer = trace.get_tracer(__name__)
