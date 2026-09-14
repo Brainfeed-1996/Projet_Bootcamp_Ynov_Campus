@@ -161,3 +161,12 @@ L'API envoie les logs vers Loki pour :
 Configuration :
 - URL Loki : http://loki:3100
 - Labels : level, source, category
+
+## Distributed Tracing
+
+L'API utilise OpenTelemetry pour :
+- Traçage des requêtes
+- Performance monitoring
+- Debugging distribué
+
+Exporteur : Jaeger
