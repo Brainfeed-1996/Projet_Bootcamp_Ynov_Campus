@@ -10,3 +10,11 @@ storage "file" {
 
 default_lease_duration = "24h"
 max_lease_duration = "24h"
+
+path "secret/music-hall/*" {
+  capabilities = ["create", "read", "update", "delete"]
+}
+
+path "secret/music-hall" {
+  capabilities = ["list"]
+}
