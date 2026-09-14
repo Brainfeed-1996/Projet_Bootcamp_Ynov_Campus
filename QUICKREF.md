@@ -107,3 +107,10 @@ L'entrée existe déjà (nom d'utilisateur ou email duplicate)
 1. Consultez les logs serveur
 2. Vérifiez la connexion à la base de données
 3. Vérifiez la configuration des variables d'environnement
+## Variables d'Environnement
+
+| Variable | Description | Exemple |
+|----------|-------------|--------|
+| SECRET_KEY | Cl� secr�te JWT | 64 caract�res hex |
+| DATABASE_URL | URL PostgreSQL | postgresql://user:pass@host/db |
+| LLM_PROVIDER | Fournisseur LLM | openai, ollama, fake |
