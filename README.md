@@ -20,6 +20,58 @@ API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un co
 9. [Problèmes courants et solutions](#problèmes-courants-et-solutions)
 10. [Définition of Done](#définition-of-done)
 11. [Support et nettoyage](#support-et-nettoyage)
+12. [Architecture](#architecture)
+13. [Contribuer](#contribuer)
+
+---
+
+## Architecture
+
+Le projet suit une architecture en 3 couches :
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Client HTTP   │────▶│   FastAPI App    │────▶│  PostgreSQL DB  │
+│   (curl/docs)   │     │   (app.py)       │     │  (users/logs)   │
+└─────────────────┘     └────────┬─────────┘     └─────────────────┘
+                                │
+                        ┌───────┴────────┐
+                        │  LLM Providers │
+                        │  (OpenAI/Ollama│
+                        │   /Fake)       │
+                        └────────────────┘
+```
+
+### Composants
+
+- **app.py** : Application FastAPI principale avec authentification JWT
+- **providers/** : Fournisseurs LLM (OpenAI, Ollama, Fake pour les tests)
+- **schemas/** : Modèles Pydantic pour la validation
+- **scripts/** : Scripts d'initialisation Docker et Vault
+- **config/** : Configurations Vault (optionnel)
+- **tests/** : Suite de tests complets
+
+---
+
+## Contribuer
+
+1. Fork le dépôt
+2. Créer une branche feature (`git checkout -b feature/ma-fonctionnalité`)
+3. Commit les changements (`git commit -m "feat: ma fonctionnalité"`)
+4. Push la branche (`git push origin feature/ma-fonctionnalité`)
+5. Créer une Pull Request
+
+### Style des commits
+
+Utiliser [Conventional Commits](https://www.conventionalcommits.org/) :
+- `feat` : Nouvelle fonctionnalité
+- `fix` : Correction de bug
+- `docs` : Documentation
+- `test` : Tests
+- `chore` : Maintenance
+- `refactor` : Refactoring
+- `perf` : Performance
+- `security` : Sécurité
 
 ---
 
