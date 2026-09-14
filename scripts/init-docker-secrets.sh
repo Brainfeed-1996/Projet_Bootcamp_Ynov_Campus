@@ -7,6 +7,7 @@
 set -euo pipefail
 
 SECRETS_DIR="./secrets"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Vérifier si le répertoire existe déjà
 if [ -d "$SECRETS_DIR" ]; then
@@ -27,6 +28,44 @@ if ! command -v openssl &>/dev/null; then
     echo "ERREUR: openssl est requis pour générer des secrets." >&2
     exit 1
 fi
+
+# Générer les secrets
+echo "Génération des secrets..."
+
+# Secret key pour JWT
+openssl rand -base64 32 > "$SECRETS_DIR/secret_key"
+chmod 600 "$SECRETS_DIR/secret_key"
+echo "  - secret_key généré"
+
+# Database password
+openssl rand -base64 16 > "$SECRETS_DIR/db_password"
+chmod 600 "$SECRETS_DIR/db_password"
+echo "  - db_password généré"
+
+# Admin password
+openssl rand -base64 16 > "$SECRETS_DIR/admin_password"
+chmod 600 "$SECRETS_DIR/admin_password"
+echo "  - admin_password généré"
+
+# Générer un token API
+openssl rand -hex 32 > "$SECRETS_DIR/api_token"
+chmod 600 "$SECRETS_DIR/api_token"
+echo "  - api_token généré"
+
+# Vérifier que les fichiers ont été créés
+if [ ! -f "$SECRETS_DIR/secret_key" ]; then
+    echo "ERREUR: Échec de création de secret_key" >&2
+    exit 1
+fi
+
+echo ""
+echo "Secrets créés dans $SECRETS_DIR :"
+ls -la "$SECRETS_DIR"
+echo ""
+echo "N'oubliez pas de :
+- Ajouter $SECRETS_DIR/ dans .gitignore
+- Ne jamais commit ces fichiers
+- Supprimer ces fichiers avant le déploiement en production"
 
 # Générer un seul mot de passe partagé (utilisé par l'application et PostgreSQL)
 SHARED_PASSWORD=$(openssl rand -base64 32)
