@@ -35,3 +35,7 @@ def test_detailed_health():
     resp = client.get('/health/detailed')
     assert resp.status_code == 200
     assert 'checks' in resp.json()
+
+def test_export_logs():
+    resp = client.get('/export/logs?format=json')
+    assert resp.status_code in [200, 401]
