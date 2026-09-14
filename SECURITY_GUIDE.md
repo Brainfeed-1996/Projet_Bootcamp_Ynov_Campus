@@ -113,3 +113,20 @@ semgrep --config=auto app.py
 - Erreurs 500 : Immédiate
 - Latence élevée : 5 minutes
 - Base de données lente : 2 minutes
+
+## Sauvegarde et Restauration
+
+### Sauvegarde automatique
+```bash
+pg_dump -h db music_hall > backup.sql
+```
+
+### Restauration
+```bash
+psql -h db music_hall < backup.sql
+```
+
+### Fréquence
+- Quotidienne : 3h du matin
+- Hebdomadaire : Dimanche 2h
+- Mensuelle : Premier du mois
