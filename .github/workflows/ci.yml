@@ -188,3 +188,8 @@ jobs:
             pytest.xml
             coverage.xml
           retention-days: 30
+
+    steps:
+      - name: Run tests in parallel
+        run: |
+          pytest tests/ -n auto --cov=app --cov-report=xml
