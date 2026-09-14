@@ -181,3 +181,13 @@ Exporteur : Jaeger
 | Logs d'audit | 7 ans |
 
 Les données sont supprimées automatiquement après la période.
+
+## Audit Logging
+
+Toutes les opérations sensibles sont logged :
+- Création/Modification/Suppression
+- Authentification
+- Changements de rôle
+- Accès aux données sensibles
+
+Les logs d'audit sont conservés 7 ans.
