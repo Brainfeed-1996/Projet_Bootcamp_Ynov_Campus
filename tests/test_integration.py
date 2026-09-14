@@ -111,3 +111,9 @@ def test_loki_integration():
     # Mock the request
     send_to_loki({'streams': []})
     assert True
+
+def test_tracer_initialization():
+    from app import tracer
+    with tracer.start_as_current_span('test'):
+        pass
+    assert True
