@@ -109,3 +109,8 @@ volumes:
 # - Le filesystem est read_only pour le service web
 # - Les ressources sont limitées pour éviter les débordements
 # ---
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
