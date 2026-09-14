@@ -714,3 +714,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             if not token:
                 return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
         return await call_next(request)
+
+# Use 12 rounds for bcrypt (default is 10)
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
