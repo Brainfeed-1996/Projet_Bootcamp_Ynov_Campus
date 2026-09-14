@@ -139,3 +139,14 @@ Les réponses incluent les headers :
 - X-RateLimit-Limit
 - X-RateLimit-Remaining
 - X-RateLimit-Reset
+
+## Export des Données
+
+L'API permet d'exporter les logs dans différents formats :
+- JSON (défaut)
+- CSV
+- Excel (à venir)
+
+Endpoints :
+- `GET /export/logs` : Exporter les logs
+- `GET /export/analyses` : Exporter les analyses
