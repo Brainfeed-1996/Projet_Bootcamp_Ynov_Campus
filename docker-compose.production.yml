@@ -166,3 +166,12 @@ secrets:
       - "14268:14268"
     environment:
       - COLLECTOR_OTLP_HTTP_PORT=14268
+
+  cleanup:
+    image: bitnami/cron:8
+    environment:
+      - CRON_EXPR=0 3 * * *
+    command: >
+      sh -c 'curl -X POST http://app:5000/api/cleanup'
+    depends_on:
+      - app
