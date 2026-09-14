@@ -254,3 +254,11 @@ L'API utilise un rate limiting pour protéger contre les abus :
 - Authentification : 10 tentatives/minute
 - Création de logs : 50/minute
 - Analyse IA : 30/minute
+
+## Changelog
+
+### v1.1.0 (2025-09)
+- Ajout du rate limiting
+- Amélioration de la sécurité (headers, validation)
+- Ajout des tests de performance
+- Documentation complète
