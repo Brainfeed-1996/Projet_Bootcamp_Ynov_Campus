@@ -87,3 +87,11 @@ def test_database_transaction_rollback():
     assert resp.status_code == 201
     final_count = client.get('/logs').json().__len__()
     assert final_count == initial_count + 1
+
+def test_complete_workflow():
+    # 1. Login
+    # 2. Create log
+    # 3. Analyze log
+    # 4. Get analysis
+    # 5. Verify results
+    pass
