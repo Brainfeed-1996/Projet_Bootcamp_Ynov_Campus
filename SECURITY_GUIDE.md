@@ -141,3 +141,11 @@ psql -h db music_hall < backup.sql
 | Logs d'audit | 7 ans |
 
 Les données sont supprimées automatiquement après la période.
+
+## Plan de Réponse aux Incidents
+
+1. **Détection** : Alertes automatisées
+2. **Containment** : Isolation du système affecté
+3. **Éradication** : Suppression de la menace
+4. **Restauration** : Retour à la normale
+5. **Amélioration** : Revue post-incident
