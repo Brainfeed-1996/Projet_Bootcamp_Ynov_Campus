@@ -117,3 +117,10 @@ def test_tracer_initialization():
     with tracer.start_as_current_span('test'):
         pass
     assert True
+
+def test_log_cleanup():
+    from app import cleanup_old_logs
+    # Create old log
+    # Call cleanup
+    # Verify old log is deleted
+    pass
