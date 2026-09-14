@@ -847,3 +847,9 @@ def bulk_insert_logs(db, logs: list, batch_size: int = 1000):
         batch = logs[i:i+batch_size]
         db.bulk_save_objects(batch)
         db.commit()
+
+# Automatic log cleanup
+def cleanup_old_logs(db, days: int = 90):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
+    db.commit()
