@@ -95,3 +95,9 @@ def test_complete_workflow():
     # 4. Get analysis
     # 5. Verify results
     pass
+
+def test_email_notification():
+    from app import send_alert_email
+    # Mock SMTP server
+    send_alert_email('test@example.com', 'Test', 'Test body')
+    assert True  # If no exception, test passes
