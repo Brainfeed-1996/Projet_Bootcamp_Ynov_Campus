@@ -53,3 +53,12 @@ def test_login_missing_fields(client):
     """Test de connexion sans champs requis."""
     resp = client.post("/auth/login", data={})
     assert resp.status_code == 422
+def test_token_expiration():
+    # Test with expired token
+    expired_token = create_access_token({'sub': 'test'}, expires_delta=timedelta(seconds=-1))
+    resp = client.get('/logs', headers={'Authorization': f'Bearer {expired_token}'})
+    assert resp.status_code == 401
+
+def test_invalid_token_format():
+    resp = client.get('/logs', headers={'Authorization': 'InvalidToken'})
+    assert resp.status_code == 401
