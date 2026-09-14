@@ -130,3 +130,13 @@ volumes:
         reservations:
           cpus: '0.25'
           memory: 256M
+
+    secrets:
+      - db_password
+      - secret_key
+      - openai_api_key
+secrets:
+  db_password:
+    file: ./secrets/db_password
+  secret_key:
+    file: ./secrets/secret_key
