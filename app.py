@@ -793,3 +793,9 @@ def validate_configuration():
 
 # Validate on startup
 validate_configuration()
+
+def create_error_response(status_code: int, message: str, context: dict = None) -> JSONResponse:
+    content = {'detail': message}
+    if context:
+        content['context'] = context
+    return JSONResponse(status_code=status_code, content=content)
