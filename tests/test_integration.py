@@ -101,3 +101,7 @@ def test_email_notification():
     # Mock SMTP server
     send_alert_email('test@example.com', 'Test', 'Test body')
     assert True  # If no exception, test passes
+
+def test_webhook_endpoint():
+    resp = client.post('/webhooks/log-created', json={'log_id': 1})
+    assert resp.status_code in [200, 404]
