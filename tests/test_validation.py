@@ -72,3 +72,10 @@ def test_user_role_invalid(client):
         },
     )
     assert resp.status_code == 422
+def test_invalid_json_payload():
+    resp = client.post('/logs', data='not json')
+    assert resp.status_code == 422
+
+def test_missing_required_fields():
+    resp = client.post('/logs', json={'level': 'INFO'})
+    assert resp.status_code == 422
