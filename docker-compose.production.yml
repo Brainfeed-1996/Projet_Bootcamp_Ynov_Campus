@@ -140,3 +140,13 @@ secrets:
     file: ./secrets/db_password
   secret_key:
     file: ./secrets/secret_key
+
+  backup:
+    image: postgres:15
+    environment:
+      PGUSER: appuser
+      PGPASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - backups:/backup
+    depends_on:
+      - db
