@@ -766,3 +766,8 @@ API_KEYS = {
 
 def validate_api_key(api_key: str) -> bool:
     return api_key in API_KEYS.values()
+
+@app.post('/webhooks/log-created', tags=['Webhooks'])
+def handle_log_webhook(log_data: dict):
+    # Notify external systems
+    return {'status': 'received'}
