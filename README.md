@@ -282,3 +282,19 @@ L'API utilise un rate limiting pour protéger contre les abus :
 - source: Source du log
 - log_metadata: Métadonnées JSON
 - created_at: Date d'ingestion
+
+## Contribuer
+
+### Avant de committer
+1. Exécuter les tests : `pytest tests/ -v`
+2. Vérifier le linting : `ruff check .`
+3. Vérifier les types : `mypy app.py`
+4. Ne jamais commit de secrets
+
+### Style des commits
+- `feat` : Nouvelle fonctionnalité
+- `fix` : Correction de bug
+- `docs` : Documentation
+- `test` : Tests
+- `refactor` : Refactoring
+- `chore` : Maintenance
