@@ -113,3 +113,11 @@ echo "- Ce script est optionnel et doit être exécuté manuellement"
 echo "- Les secrets sont stockés dans Vault, pas dans les fichiers"
 echo "- Les identifiants AppRole doivent avoir les permissions appropriées"
 echo "- En production, utiliser un système de gestion des secrets centralisé"
+# Renouveler le token Vault
+vault token renew -increment=3600 2>/dev/null || true
+
+# V�rifier la validit� du token
+if ! vault token lookup -field=expire_time 2>/dev/null; then
+    echo 'Token Vault expir�, re-authentification requise'
+    exit 1
+fi
