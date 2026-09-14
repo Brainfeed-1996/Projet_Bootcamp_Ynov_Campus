@@ -82,3 +82,8 @@ def test_password_hashing_strength():
     hashed = hash_password('test123')
     assert len(hashed) > 50
     assert hashed.startswith('$2')
+
+def test_api_key_validation():
+    from app import validate_api_key
+    assert validate_api_key('key123') == True
+    assert validate_api_key('invalid') == False
