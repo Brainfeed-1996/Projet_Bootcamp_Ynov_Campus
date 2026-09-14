@@ -18,3 +18,12 @@ path "secret/music-hall/*" {
 path "secret/music-hall" {
   capabilities = ["list"]
 }
+
+# Dynamic secrets for database
+path "dynamic/db-credentials/music-hall" {
+  capabilities = ["read"]
+  parameters = {
+    ttl = "1h"
+    max_ttl = "24h"
+  }
+}
