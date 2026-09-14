@@ -861,3 +861,11 @@ class AuditLogger:
     
     def log_operation(self, user: str, action: str, resource: str):
         self.logger.info(f'User {user} performed {action} on {resource}')
+
+@app.get('/export/logs', tags=['Export'])
+def export_logs(format: str = 'json', db: Session = Depends(get_db)):
+    logs = db.execute(select(Log)).scalars().all()
+    if format == 'csv':
+        # Export as CSV
+        pass
+    return {'logs': [log.__dict__ for log in logs]}
