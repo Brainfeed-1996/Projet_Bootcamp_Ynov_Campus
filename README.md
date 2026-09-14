@@ -262,3 +262,23 @@ L'API utilise un rate limiting pour protéger contre les abus :
 - Amélioration de la sécurité (headers, validation)
 - Ajout des tests de performance
 - Documentation complète
+
+## Schéma de Base de Données
+
+### Table users
+- id: Identifiant unique
+- username: Nom d'utilisateur (unique)
+- email: Adresse email (unique)
+- password_hash: Mot de passe haché
+- role: Rôle (admin/writer/reader)
+- is_active: Compte actif
+- created_at: Date de création
+
+### Table logs
+- id: Identifiant unique
+- occurred_at: Horodatage de l'événement
+- level: Niveau (DEBUG/INFO/WARNING/ERROR/CRITICAL)
+- message: Contenu du log
+- source: Source du log
+- log_metadata: Métadonnées JSON
+- created_at: Date d'ingestion
