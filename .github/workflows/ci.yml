@@ -199,3 +199,10 @@ jobs:
           pip install bandit safety
           bandit -r app.py -ll  # Low severity and above
           safety check -r requirements.txt --db
+
+      - name: Check observability
+        run: |
+          # Verify metrics endpoint
+          curl -f http://localhost:5000/metrics || exit 1
+          # Verify health endpoint
+          curl -f http://localhost:5000/health || exit 1
