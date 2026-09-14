@@ -193,3 +193,9 @@ jobs:
       - name: Run tests in parallel
         run: |
           pytest tests/ -n auto --cov=app --cov-report=xml
+
+      - name: Security gates
+        run: |
+          pip install bandit safety
+          bandit -r app.py -ll  # Low severity and above
+          safety check -r requirements.txt --db
