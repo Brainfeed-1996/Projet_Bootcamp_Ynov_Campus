@@ -666,3 +666,12 @@ def validate_severity(severity: str) -> bool:
 # Enhanced error handling for bulk operations
 def handle_bulk_error(error: Exception, line_number: int) -> str:
     return f'Line {line_number}: {str(error)}'
+
+# Optimized query with indexes
+def get_logs_optimized(db, level=None, source=None, limit=100):
+    query = select(Log).order_by(Log.created_at.desc()).limit(limit)
+    if level:
+        query = query.where(Log.level == level)
+    if source:
+        query = query.where(Log.source == source)
+    return db.execute(query).scalars().all()
