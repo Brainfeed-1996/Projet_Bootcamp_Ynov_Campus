@@ -91,3 +91,13 @@ semgrep --config=auto app.py
 - [ ] Vérifier les permissions Vault
 - [ ] Sauvegarder la base de données
 - [ ] Surveiller les logs post-déploiement
+
+## Headers de Sécurité
+
+| Header | Valeur | Description |
+|--------|--------|-------------|
+| X-Content-Type-Options | nosniff | Empêche le MIME sniffing |
+| X-Frame-Options | DENY | Empêche le clickjacking |
+| X-XSS-Protection | 1; mode=block | Protection XSS |
+| Referrer-Policy | strict-origin-when-cross-origin | Politique de referral |
+| Content-Security-Policy | default-src 'self' | Politique CSP |
