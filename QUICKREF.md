@@ -114,3 +114,15 @@ L'entrÃ©e existe dÃ©jÃ  (nom d'utilisateur ou email duplicate)
 | SECRET_KEY | Clé secrète JWT | 64 caractères hex |
 | DATABASE_URL | URL PostgreSQL | postgresql://user:pass@host/db |
 | LLM_PROVIDER | Fournisseur LLM | openai, ollama, fake |
+
+## Problèmes Courants
+
+### Erreur de connexion à la base
+1. Vérifier que PostgreSQL est démarré
+2. Vérifier les identifiants dans .env
+3. Vérifier les pare-feu et DNS
+
+### Erreur d'authentification
+1. Vérifier la clé secrète
+2. Vérifier la validité du token
+3. Vérifier les rôles de l'utilisateur
