@@ -655,3 +655,10 @@ async def internal_server_error_handler(request: Request, exc: Exception):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=5000)
+
+# Validation helper functions
+def validate_log_level(level: str) -> bool:
+    return level.upper() in VALID_LEVELS
+
+def validate_severity(severity: str) -> bool:
+    return severity.upper() in VALID_SEVERITIES
