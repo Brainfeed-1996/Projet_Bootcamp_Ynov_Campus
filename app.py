@@ -853,3 +853,11 @@ def cleanup_old_logs(db, days: int = 90):
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
     db.commit()
+
+# Audit logging
+class AuditLogger:
+    def __init__(self):
+        self.logger = logging.getLogger('audit')
+    
+    def log_operation(self, user: str, action: str, resource: str):
+        self.logger.info(f'User {user} performed {action} on {resource}')
