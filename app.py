@@ -705,3 +705,12 @@ def get_metrics():
         'total_analyses': 0,
         'uptime': '0:00:00'
     }
+
+# CSRF protection
+class CSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+            token = request.headers.get('X-CSRF-Token')
+            if not token:
+                return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
+        return await call_next(request)
