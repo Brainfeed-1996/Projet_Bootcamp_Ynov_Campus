@@ -771,3 +771,16 @@ def validate_api_key(api_key: str) -> bool:
 def handle_log_webhook(log_data: dict):
     # Notify external systems
     return {'status': 'received'}
+
+# Email service
+class EmailService:
+    def __init__(self, smtp_server: str, port: int):
+        self.smtp_server = smtp_server
+        self.port = port
+    
+    def send(self, to: str, subject: str, body: str):
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['To'] = to
+        with smtplib.SMTP(self.smtp_server, self.port) as server:
+            server.send_message(msg)
