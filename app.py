@@ -675,3 +675,13 @@ def get_logs_optimized(db, level=None, source=None, limit=100):
     if source:
         query = query.where(Log.source == source)
     return db.execute(query).scalars().all()
+
+import uuid
+
+# Add request ID middleware
+def add_request_id_middleware(request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers['X-Request-ID'] = request_id
+    return response
