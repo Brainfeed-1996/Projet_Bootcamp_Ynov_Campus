@@ -799,3 +799,10 @@ def create_error_response(status_code: int, message: str, context: dict = None) 
     if context:
         content['context'] = context
     return JSONResponse(status_code=status_code, content=content)
+
+# Loki client for log aggregation
+import requests
+
+def send_to_loki(log_entry: dict):
+    headers = {'Content-Type': 'application/json'}
+    requests.post('http://loki:3100/loki/api/v1/push', json=log_entry, headers=headers)
