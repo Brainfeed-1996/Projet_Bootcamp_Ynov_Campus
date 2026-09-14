@@ -170,3 +170,14 @@ L'API utilise OpenTelemetry pour :
 - Debugging distribué
 
 Exporteur : Jaeger
+
+## Rétention des Données
+
+| Type de données | Durée de rétention |
+|-----------------|-------------------|
+| Logs | 90 jours |
+| Analyses | 90 jours |
+| Utilisateurs | 365 jours |
+| Logs d'audit | 7 ans |
+
+Les données sont supprimées automatiquement après la période.
