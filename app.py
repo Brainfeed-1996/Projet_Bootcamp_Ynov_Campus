@@ -747,3 +747,14 @@ def parse_csv_stream(file_content: str):
     reader = csv.DictReader(file_content.splitlines())
     for row in reader:
         yield row
+
+import smtplib
+from email.mime.text import MIMEText
+
+def send_alert_email(to_email: str, subject: str, body: str):
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['To'] = to_email
+    # Send via SMTP
+    with smtplib.SMTP('localhost') as server:
+        server.send_message(msg)
