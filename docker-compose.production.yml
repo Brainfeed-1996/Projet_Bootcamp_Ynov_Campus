@@ -15,7 +15,7 @@ services:
       dockerfile: Dockerfile
       target: production
     ports:
-      - "80:80"
+      - "5000:5000"
     env_file:
       - .env.production
     secrets:
@@ -55,7 +55,7 @@ services:
         condition: on-failure
         max_attempts: 3
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:80/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
       interval: 10s
       timeout: 5s
       retries: 5

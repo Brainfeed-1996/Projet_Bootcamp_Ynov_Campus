@@ -8,18 +8,11 @@ vault {
 }
 
 auto_auth {
-  method "kubernetes" {
+  method "token" {
     config = {
-      role = "vault-agent"
+      token_file = "/tmp/vault-token"
     }
   }
-
-  # Alternative : utilisation d'un token
-  # method "token" {
-  #   config = {
-  #     token_file = "/tmp/vault-token"
-  #   }
-  # }
 }
 
 template {

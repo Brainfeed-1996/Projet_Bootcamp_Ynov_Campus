@@ -20,11 +20,14 @@ services:
     environment:
       VAULT_ADDR: http://0.0.0.0:8200
       VAULT_API_ADDR: http://0.0.0.0:8200
+      VAULT_DEV: "1"
+      VAULT_DEV_ROOT_TOKEN_ID: "${VAULT_ROOT_TOKEN:-root}"
     cap_add:
       - IPC_LOCK
     read_only: true
     tmpfs:
       - /tmp
+      - /vault/tls
     volumes:
       - vault_data:/vault/data
       - vault_logs:/vault/logs
@@ -48,11 +51,12 @@ services:
         condition: service_healthy
     environment:
       VAULT_ADDR: http://vault:8200
-      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_TOKEN: "${VAULT_TOKEN:-root}"
     volumes:
       - vault_data:/vault/data
       - vault_secrets:/run/secrets
       - ./config/vault-agent:/etc/vault-agent:ro
+    command: bash -c 'echo "$$VAULT_TOKEN" > /tmp/vault-token && exec vault agent -config=/etc/vault-agent/agent.hcl'
     read_only: true
     tmpfs:
       - /tmp
@@ -87,6 +91,10 @@ services:
     secrets:
       - db_password
       - secret_key
+      - postgres_user
+      - postgres_password
+    volumes:
+      - vault_secrets:/run/secrets
     environment:
       - VAULT_ADDR=http://vault:8200
     read_only: true
