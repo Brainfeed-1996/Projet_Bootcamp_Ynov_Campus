@@ -834,3 +834,9 @@ class Observability:
     def log_error(self, error: Exception):
         with self.tracer.start_as_current_span('error'):
             pass
+
+# Batch processing
+def process_batch(items: list, batch_size: int = 100):
+    for i in range(0, len(items), batch_size):
+        batch = items[i:i+batch_size]
+        yield batch
