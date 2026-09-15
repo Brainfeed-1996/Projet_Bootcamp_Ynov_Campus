@@ -274,6 +274,7 @@ app = FastAPI(
     contact={"name": "Music Hall - DevSecOps"},
 )
 
+app.add_middleware(_RequestIDContextMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware, max_size=MAX_REQUEST_SIZE)
@@ -451,7 +452,7 @@ def bulk_insert_logs(db: Session, logs: list[dict], batch_size: int = 1000):
     return inserted
 
 
-def stream_logs_as_csv(db: Session):
+def stream_logs_as_csv(db: Session, chunk_size: int = 100):
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["id", "level", "message", "source", "created_at"])
@@ -463,6 +464,7 @@ def stream_logs_as_csv(db: Session):
         .order_by(Log.created_at, Log.id)
         .execution_options(stream_results=True)
     )
+    count = 0
     for log in db.execute(stmt).scalars():
         writer.writerow(
             [
@@ -473,6 +475,14 @@ def stream_logs_as_csv(db: Session):
                 log.created_at.isoformat() if log.created_at else "",
             ]
         )
+        count += 1
+        if count >= chunk_size:
+            output.seek(0)
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+            count = 0
+    if count > 0:
         output.seek(0)
         yield output.getvalue()
         output.seek(0)
@@ -624,9 +634,12 @@ def create_log(payload: LogCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/logs/export", tags=["Logs"])
-def export_logs(db: Session = Depends(get_db)):
+def export_logs(
+    chunk_size: int = 100,
+    db: Session = Depends(get_db),
+):
     return StreamingResponse(
-        stream_logs_as_csv(db),
+        stream_logs_as_csv(db, chunk_size=chunk_size),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=logs.csv"},
     )
