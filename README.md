@@ -1563,6 +1563,151 @@ min_wal_size = 1GB
 
 ---
 
+### Vues Métier
+
+#### Statistiques Globales (Dashboard)
+
+```sql
+CREATE VIEW v_dashboard_stats AS
+SELECT
+  (SELECT count(*) FROM users WHERE is_active) as active_users,
+  (SELECT count(*) FROM logs) as total_logs,
+  (SELECT count(*) FROM analyses) as total_analyses,
+  (SELECT count(*) FROM analyses WHERE result::jsonb->>'severity' IN ('HIGH','CRITICAL')) as critical_alerts,
+  (SELECT count(*) FROM logs WHERE created_at > now() - interval '24 hours') as logs_24h,
+  now() as updated_at;
+```
+
+#### Top Sources de Logs
+
+```sql
+CREATE VIEW v_top_sources AS
+SELECT
+  source,
+  count(*) as log_count,
+  count(*) FILTER (WHERE level = 'ERROR') as error_count,
+  count(*) FILTER (WHERE level = 'CRITICAL') as critical_count,
+  max(created_at) as last_seen
+FROM logs
+GROUP BY source
+ORDER BY log_count DESC;
+```
+
+#### Logs sans Analyse (Candidats)
+
+```sql
+CREATE VIEW v_unanalyzed_logs AS
+SELECT
+  l.id,
+  l.level,
+  l.message,
+  l.source,
+  l.created_at,
+  l.log_metadata
+FROM logs l
+LEFT JOIN analyses a ON a.log_id = l.id
+WHERE a.id IS NULL
+ORDER BY l.created_at DESC;
+```
+
+### Automatisation de la Rétention des Données
+
+```sql
+-- Function: supprimer les données expirées
+CREATE OR REPLACE FUNCTION purge_old_data()
+RETURNS void AS $$
+BEGIN
+  -- Supprimer les analyses de logs > 90 jours
+  DELETE FROM analyses
+  WHERE log_id NOT IN (
+    SELECT id FROM logs WHERE created_at > now() - interval '90 days'
+  );
+
+  -- Supprimer les logs > 90 jours
+  DELETE FROM logs
+  WHERE created_at < now() - interval '90 days';
+
+  -- Les utilisateurs sont conservés 365 jours (conforme RGPD)
+  DELETE FROM users
+  WHERE is_active = true
+    AND created_at < now() - interval '365 days';
+
+  RAISE NOTICE 'Purge terminée : %, %, % rows',
+    (SELECT count(*) FROM logs WHERE created_at < now() - interval '90 days'),
+    (SELECT count(*) FROM analyses WHERE log_id NOT IN (SELECT id FROM logs WHERE created_at > now() - interval '90 days')),
+    (SELECT count(*) FROM users WHERE is_active = true AND created_at < now() - interval '365 days');
+END;
+$$ LANGUAGE plpgsql;
+
+-- Job pg_cron pour exécution quotidienne (si pg_cron installé)
+SELECT cron.schedule('purge-old-data', '0 3 * * *', 'SELECT purge_old_data()');
+```
+
+### Procédures de Maintenance
+
+#### Reindex et VACUUM Programmé
+
+```sql
+-- Function: maintenance hebdomadaire
+CREATE OR REPLACE FUNCTION weekly_maintenance()
+RETURNS void AS $$
+BEGIN
+  -- VACUUM ANALYZE sur les tables principales
+  VACUUM ANALYZE logs;
+  VACUUM ANALYZE analyses;
+  VACUUM ANALYZE users;
+
+  -- Reindex des index les plus utilisés
+  REINDEX INDEX ix_logs_level_created_at;
+  REINDEX INDEX ix_logs_source_created_at;
+  REINDEX INDEX ix_analyses_log_id_created_at;
+
+  RAISE NOTICE 'Maintenance hebdomadaire terminée';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Schedule : chaque dimanche à 2h du matin
+SELECT cron.schedule('weekly-maintenance', '0 2 * * 0', 'SELECT weekly_maintenance()');
+```
+
+### Monitoring de l'Intégrité de la Base
+
+```sql
+-- Vérification de l'intégrité des tables
+SELECT
+  schemaname,
+  tablename,
+  pg_relation_size(schemaname || '.' || tablename) as size_bytes,
+  pg_size_pretty(pg_relation_size(schemaname || '.' || tablename)) as size_pretty,
+  pg_stat_user_tables.relpages as pages,
+  pg_stat_user_tables.seq_scan as seq_scans,
+  pg_stat_user_tables.idx_scan as idx_scans,
+  pg_stat_user_tables.n_tup_ins as inserts,
+  pg_stat_user_tables.n_tup_upd as updates,
+  pg_stat_user_tables.n_tup_del as deletes
+FROM pg_stat_user_tables
+JOIN pg_class ON pg_class.relname = pg_stat_user_tables.relname
+WHERE schemaname = 'public'
+ORDER BY pg_relation_size(schemaname || '.' || tablename) DESC;
+
+-- Vérifier les tables sans index
+SELECT
+  t.relname as table_name,
+  c.relname as index_name,
+  a.attname as column_name
+FROM pg_class t
+JOIN pg_attribute a ON a.attrelid = t.oid
+LEFT JOIN pg_index i ON i.indrelid = t.oid AND a.attnum = ANY(i.indkey)
+LEFT JOIN pg_class c ON c.oid = i.indexrelid
+WHERE t.relkind = 'r'
+  AND c.relname IS NULL
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+ORDER BY t.relname;
+```
+
+---
+
 ## Contribuer
 
 ### Avant de committer
