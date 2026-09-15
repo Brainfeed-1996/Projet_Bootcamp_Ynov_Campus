@@ -41,6 +41,9 @@ services:
         limits:
           cpus: '0.50'
           memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     healthcheck:
       test: ["CMD", "/app/scripts/healthcheck/web-healthcheck.sh"]
       interval: 10s
@@ -81,6 +84,9 @@ services:
       resources:
         limits:
           cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
           memory: 256M
 
 secrets:
