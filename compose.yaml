@@ -1,6 +1,7 @@
-# compose.yaml - Configuration de développement
-# Secrets : utiliser un fichier .env local pour le développement
-# En production, utiliser docker-compose.production.yml avec des secrets Docker
+# compose.yaml - Development configuration
+# Secrets: use local .env file for development
+# In production, use docker-compose.production.yml with Docker secrets
+
 services:
   web:
     build:
@@ -41,11 +42,13 @@ services:
           cpus: '0.50'
           memory: 256M
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:5000/health"]
+      test: ["CMD", "/app/scripts/healthcheck/web-healthcheck.sh"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
+    volumes:
+      - ./scripts/healthcheck:/app/scripts/healthcheck:ro
 
   db:
     image: postgres:15-alpine
@@ -59,12 +62,21 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./scripts/healthcheck:/scripts/healthcheck:ro
     healthcheck:
-      test: ["CMD-SHELL", "sh", "-c", "pg_isready -U \"$$(cat /run/secrets/postgres_user)\" -d $$POSTGRES_DB"]
+      test: ["CMD", "/scripts/healthcheck/db-healthcheck.sh"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 10s
     read_only: false
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     deploy:
       resources:
         limits:
@@ -85,10 +97,11 @@ volumes:
   postgres_data:
 
 # ---
-# Limites :
-# - Aucune valeur par défaut pour les secrets (sécurité)
-# - Les secrets sont montés via le driver de secrets Docker
-# - Le filesystem du service web est read_only
-# - L'utilisateur est non-root (voir Dockerfile)
-# - Fichier .env requis pour le développement
+# Notes:
+# - No default values for secrets (security)
+# - Secrets mounted via Docker secrets driver
+# - Web service filesystem is read_only
+# - User is non-root (see Dockerfile)
+# - .env file required for development
+# - Healthcheck scripts mounted from host
 # ---
