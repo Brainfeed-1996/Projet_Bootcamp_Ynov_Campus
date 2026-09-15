@@ -276,6 +276,410 @@ Les données sont supprimées automatiquement après la période.
 4. **Restauration** : Retour à la normale
 5. **Amélioration** : Revue post-incident
 
+---
+
+## Incident Response Runbook
+
+Ce runbook détaille les procédures opérationnelles pour répondre aux incidents de sécurité sur Log Sentinel API.
+
+### 1. Classification des Incidents
+
+| Niveau | Critères | Exemples | Temps de réponse | Escalade |
+|--------|----------|----------|------------------|----------|
+| **P0 - Critique** | Perte de données, compromission active, service down | Injection SQL réussie, RCE, fuite secrets prod, DB corrompue | < 15 min | CISO, Direction, Client si données PII |
+| **P1 - Majeur** | Dégradation sévère, vulnérabilité exploitée | DoS réussi, auth bypass, CVE HIGH en prod | < 1 heure | Lead Security, Tech Lead |
+| **P2 - Mineur** | Anomalie détectée, tentative bloquée | Scan détecté, rate limit déclenché, erreur 500 isolée | < 4 heures | Team Lead |
+| **P3 - Informationnel** | Événement de sécurité sans impact | Tentative login échouée, CSV malformed rejeté | < 24 heures | Log uniquement |
+
+### 2. Rôles et Responsabilités
+
+| Rôle | Responsable | Contact | Backup |
+|------|-------------|---------|--------|
+| **Incident Commander (IC)** | Tech Lead / Lead DevOps | Slack #incidents / Tel | Senior DevOps |
+| **Security Analyst** | Lead Security | Slack #security | Senior Dev |
+| **Communications** | Product Owner | Email/Slack | Scrum Master |
+| **Forensics** | Senior Dev | Slack #forensics | DevOps |
+| **Stakeholder Liaison** | Engineering Manager | Email/Teams | CTO |
+
+### 3. Procédures par Type d'Incident
+
+#### 3.1 Compromission de Secrets (API Keys, DB Password, JWT Secret)
+
+**Détection :**
+- Alerte Vault : accès anormal
+- Logs : requêtes depuis IP inconnue avec credentials valides
+- GitHub : secret scanning alert
+
+**Actions Immédiates (T+0 à T+15min) :**
+```bash
+# 1. Révoquer le secret compromis
+vault kv delete secret/log-sentinel  # ou path spécifique
+
+# 2. Générer nouveau secret
+openssl rand -hex 32 > new_secret.txt
+vault kv put secret/log-sentinel secret_key=@new_secret.txt
+
+# 3. Rotater les secrets Docker
+docker compose -f compose.yaml -f docker-compose.production.yml exec web \
+  sh -c 'echo "$NEW_SECRET" > /run/secrets/secret_key'
+
+# 4. Redémarrer les pods web (rolling restart)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --scale web=3 web
+
+# 5. Invalider tous les JWT existants (changer SECRET_KEY)
+#    ? Force re-login de tous les utilisateurs
+```
+
+**Investigation (T+15min à T+2h) :**
+- Analyser logs Vault : `vault audit log /var/log/vault_audit.log`
+- Vérifier Git history : `git log --all --oneline --grep="secret\|key\|password" --since="30 days ago"`
+- Scanner repo : `trufflehog git file://. --since-commit=HEAD~100`
+- Identifier scope : quel secret, depuis quand, quelles données accédées
+
+**Récupération :**
+- Déployer nouveaux secrets partout (CI, prod, staging, dev)
+- Mettre à jour `.env.production.example` avec placeholders
+- Revue post-incident sous 48h
+
+---
+
+#### 3.2 Injection SQL / Manipulation de Données
+
+**Détection :**
+- Alertes WAF / rate limit anomalies
+- Logs DB : erreurs syntaxe, requêtes lentes, `UNION SELECT` patterns
+- Données inattendues en base (nouveaux users, logs modifiés)
+
+**Actions Immédiates :**
+```bash
+# 1. Isoler la DB (couper trafic entrant sauf admin)
+docker compose -f compose.yaml -f docker-compose.production.yml exec db \
+  psql -U postgres -c "ALTER DATABASE log_sentinel CONNECTION LIMIT 1;"
+
+# 2. Snapshot forensique
+docker compose -f compose.yaml -f docker-compose.production.yml exec db \
+  pg_dump -U postgres log_sentinel > forensics_dump_$(date +%s).sql
+
+# 3. Analyser logs récents
+docker compose logs web --since=2h | grep -E "(UNION|SELECT|DROP|INSERT|UPDATE|DELETE|--|;)" | head -50
+
+# 4. Vérifier intégrité données
+docker compose exec db psql -U postgres -d log_sentinel -c "
+  SELECT count(*) FROM logs WHERE message LIKE '%UNION%';
+  SELECT count(*) FROM users WHERE username LIKE '%'||chr(39)||'%';
+"
+```
+
+**Investigation :**
+- Identifier endpoint vulnérable (logs + stack traces)
+- Corriger validation Pydantic / requêtes paramétrées
+- Scanner code : `semgrep --config=auto app.py --rule=sql-injection`
+
+**Récupération :**
+- Restaurer depuis backup propre si données corrompues
+- Déployer fix + tests de régression
+- Monitoring renforcé 72h
+
+---
+
+#### 3.3 Déni de Service (DoS / Resource Exhaustion)
+
+**Détection :**
+- Alertes Prometheus : `cpu_usage > 90%`, `memory_usage > 90%`, `request_duration_p99 > 5s`
+- Logs : burst de requêtes depuis même IP/range
+- Health check `/health` ? timeout ou 503
+
+**Actions Immédiates :**
+```bash
+# 1. Activer rate limiting strict (si pas déjà)
+#    Vérifier middleware RateLimitMiddleware dans app.py
+
+# 2. Bloquer IPs abusives (au niveau LB/NGINX)
+#    NGINX: deny 192.0.2.0/24; dans config
+
+# 3. Scale horizontal d'urgence
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale web=6
+
+# 4. Si DB saturée : limiter connexions
+docker compose exec db psql -U postgres -c "ALTER DATABASE log_sentinel CONNECTION LIMIT 50;"
+
+# 5. Basculer LLM_PROVIDER=fake si analyse IA cause du DoS
+docker compose exec web sh -c 'echo "fake" > /run/secrets/llm_provider'
+docker compose restart web
+```
+
+**Investigation :**
+- Analyser patterns : `docker compose logs web | awk '{print $1}' | sort | uniq -c | sort -nr | head -20`
+- Identifier si ciblé (endpoint spécifique) ou volumétrique
+- Vérifier si bulk ingestion `/logs/bulk` ou `/logs/ingest-csv` abusé
+
+**Récupération :**
+- Ajuster rate limits permanents
+- Ajouter WAF rules (fail2ban, Cloudflare, NGINX rate limiting)
+- Test de charge post-fix
+
+---
+
+#### 3.4 Fuite de Données Sensibles (PII, Logs, Analyses)
+
+**Détection :**
+- DLP alert : patterns PII en sortie (email, IP, carte bancaire)
+- Logs Loki/Grafana : requêtes inhabituelles sur `/logs` ou `/analyses`
+- Signalement utilisateur / audit externe
+
+**Actions Immédiates :**
+```bash
+# 1. Couper l'accès public si exposé
+#    LB/NGINX: return 403 pour /logs, /analyses sauf IP allowlist
+
+# 2. Vérifier redaction middleware (app.py SENSITIVE_PATTERNS)
+grep -n "SENSITIVE_PATTERNS" app.py
+
+# 3. Audit accès récents
+docker compose logs web --since=24h | grep -E "(GET /logs|GET /analyses)" | awk '{print $3}' | sort | uniq -c
+
+# 4. Vérifier permissions utilisateurs
+docker compose exec db psql -U postgres -d log_sentinel -c "
+  SELECT username, role, is_active, last_login FROM users WHERE is_active=true;
+"
+```
+
+**Investigation :**
+- Quantifier données exposées (combien, quel type, quelle période)
+- Identifier cause : bug redaction, endpoint non protégé, config erronée
+- Notification RGPD si données personnelles (72h max)
+
+**Récupération :**
+- Corriger le bug redaction / ajouter middleware manquant
+- Purger caches CDN / proxy si données mises en cache
+- Revue code : tous les endpoints retournant des données utilisateur
+
+---
+
+#### 3.5 Compromission Conteneur / Supply Chain
+
+**Détection :**
+- Trivy/Snyk : CVE CRITICAL nouvelle dans image déployée
+- Comportement anormal : processus inconnus, connexions sortantes suspectes
+- Falco / runtime security alert
+
+**Actions Immédiates :**
+```bash
+# 1. Isoler le conteneur
+docker pause <container_id>
+
+# 2. Snapshot forensique
+docker commit <container_id> forensics/log-sentinel-$(date +%s)
+docker save forensics/log-sentinel-$(date +%s) > forensics_image.tar
+
+# 3. Analyser image
+trivy image forensics/log-sentinel-$(date +%s) --severity HIGH,CRITICAL
+docker history forensics/log-sentinel-$(date +%s)
+
+# 4. Redeploy image propre (tag précédent connu bon)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
+# ou rollback tag
+docker tag log-sentinel:v1.0.0 log-sentinel:latest
+docker compose up -d --no-deps web
+```
+
+**Investigation :**
+- Vérifier Dockerfile : `COPY` suspects, `RUN curl | sh`, base image
+- Scanner dependencies : `pip-audit -r requirements.txt`
+- Vérifier CI : build compromise ? (GitHub Actions logs)
+
+**Récupération :**
+- Rebuild depuis base image patchée (`python:3.11-slim` latest)
+- Pin versions dans requirements.txt
+- Signer images (cosign/notary) pour production
+
+---
+
+#### 3.6 Attaque sur Fournisseur LLM (Prompt Injection, Data Exfiltration)
+
+**Détection :**
+- Analyses retournant résultats anormaux (exfiltration prompts)
+- Coûts API anormaux (OpenAI billing alert)
+- Logs provider : requêtes depuis IP non autorisée
+
+**Actions Immédiates :**
+```bash
+# 1. Basculer en mode fake immédiatement
+docker compose exec web sh -c 'echo "fake" > /run/secrets/llm_provider'
+docker compose restart web
+
+# 2. Révoquer clé API compromise
+#    OpenAI: https://platform.openai.com/account/api-keys ? Revoke
+#    Vault: vault kv delete secret/log-sentinel/openai_api_key
+
+# 3. Générer nouvelle clé, stocker dans Vault
+vault kv put secret/log-sentinel openai_api_key="sk-new-..."
+```
+
+**Investigation :**
+- Analyser prompts envoyés : `docker compose logs web | grep "analyze" -A5 -B5`
+- Vérifier validation input avant envoi LLM (sanitization)
+- Review prompt template dans `providers/openai_provider.py`
+
+**Récupération :**
+- Renforcer validation/sanitization pre-LLM
+- Ajouter allowlist de patterns autorisés dans prompts
+- Monitoring coûts API quotidiens
+
+---
+
+### 4. Playbooks de Containment Rapide
+
+#### Isolation Réseau d'Urgence
+
+```bash
+# Couper tout trafic entrant vers web (sauf health check LB)
+docker network disconnect log-sentinel_frontend web
+# Ou au niveau LB/NGINX : upstream log_sentinel { down; }
+
+# Maintenir DB accessible pour forensics
+docker network connect log-sentinel_backend db
+```
+
+#### Mode "Maintenance" (Read-Only)
+
+```bash
+# Activer read-only sur API (via variable d'env ou feature flag)
+docker compose exec web sh -c 'echo "true" > /run/secrets/maintenance_mode'
+# Dans app.py : vérifier MAINTENANCE_MODE au démarrage des routes write
+```
+
+#### Arrêt Propre d'Urgence
+
+```bash
+# Arrêter web, garder DB/Vault/Monitoring
+docker compose -f compose.yaml -f docker-compose.production.yml stop web
+
+# Backup DB avant investigation
+docker compose exec db pg_dump -U postgres log_sentinel > emergency_backup_$(date +%s).sql
+```
+
+---
+
+### 5. Communication pendant l'Incident
+
+#### Template de Status Update (Toutes les 30 min pour P0, 1h pour P1)
+
+```
+?? INCIDENT P<level> - Log Sentinel API
+????????????????????????????????????
+?? Début : <timestamp UTC>
+?? Type : <SQLi / DoS / Secret Leak / etc.>
+?? Impact : <services affectés, utilisateurs, données>
+?? Statut : <Investigating / Contained / Recovering / Resolved>
+?? Équipe : IC=<name>, Security=<name>, Comms=<name>
+?? War Room : <Slack channel / Zoom link>
+?? Prochaine MAJ : <timestamp + 30min>
+????????????????????????????????????
+```
+
+#### Notification Externe (si P0 avec données clients)
+
+- Email clients affectés sous 24h (RGPD Art. 33)
+- Autorité de protection données (CNIL) sous 72h
+- Communication publique préparée par Comms + Legal
+
+---
+
+### 6. Post-Incident Review (PIR)
+
+**Délai : 48h après résolution**
+
+#### Template PIR
+
+```markdown
+# Post-Incident Review - INC-<YYYYMMDD>-<XXX>
+
+## Résumé Exécutif
+- **Incident** : <type, niveau>
+- **Durée** : <début ? fin> (<X>h<Y>m)
+- **Impact** : <utilisateurs, données, revenu, réputation>
+- **Cause Racine** : <5 Whys analysis>
+
+## Chronologie
+| Heure (UTC) | Événement | Action | Auteur |
+|-------------|-----------|--------|--------|
+| 14:23 | Alerte Prometheus CPU > 90% | Investigation démarrée | IC |
+| 14:25 | DoS confirmé sur /logs/bulk | Rate limit activé | Security |
+| 14:30 | Scale web x3 | Containment | DevOps |
+| 15:10 | Root cause identifié | Fix déployé | Dev |
+| 15:45 | Trafic normalisé | Recovery | IC |
+
+## Cause Racine (5 Whys)
+1. Pourquoi DoS ? ? Bulk endpoint sans limite par IP
+2. Pourquoi pas de limite ? ? Rate limiting global seulement
+3. Pourquoi global seulement ? ? Oublié lors implémentation
+4. Pourquoi oublié ? ? Pas de threat modeling sur bulk
+5. Pourquoi pas de threat modeling ? ? Processus incomplet
+
+## Actions Correctives
+| Action | Owner | Échéance | Statut |
+|--------|-------|----------|--------|
+| Rate limit par IP sur /logs/bulk | Dev | J+2 | ?? En cours |
+| Ajouter bulk dans threat model | Security | J+5 | ? Planifié |
+| Test de charge bulk endpoint | QA | J+7 | ? Planifié |
+| Alerting sur bulk ingestion rate | DevOps | J+3 | ?? En cours |
+
+## Leçons Apprises
+- Ce qui a bien marché : ...
+- Ce qui a échoué : ...
+- Surprises : ...
+- Améliorations process : ...
+```
+
+---
+
+### 7. Outils et Contacts d'Urgence
+
+#### Commandes de Diagnostic Rapide
+
+```bash
+# Santé globale
+make health          # ou script custom vérifiant /health, DB, Vault, LLM
+
+# Logs récents (dernière heure)
+docker compose logs --since=1h web > incident_logs_$(date +%s).log
+
+# Métriques clés
+curl -s http://localhost:9090/api/v1/query?query=up | jq .
+curl -s http://localhost:9090/api/v1/query?query=rate(http_requests_total[5m]) | jq .
+
+# Processus suspects dans conteneur
+docker compose exec web ps auxf
+docker compose exec web netstat -tulpn
+docker compose exec web lsof -i
+```
+
+#### Contacts
+
+| Service | Contact | Moyens |
+|---------|---------|--------|
+| **Hébergement Cloud** | Support AWS/Azure/GCP | Console + Phone (Enterprise) |
+| **Registre Docker** | Docker Hub / GHCR | Status page + Support |
+| **Vault (HCP)** | HashiCorp Support | Portal + Slack Connect |
+| **LLM Provider** | OpenAI / Ollama | Dashboard + Email |
+| **Autorité RGPD** | CNIL (France) | https://www.cnil.fr/fr/signalement-violation-donnees |
+
+---
+
+### 8. Checklist de Préparation (À Valider Mensuellement)
+
+- [ ] Runbook révisé et à jour (dernière révision : <date>)
+- [ ] Contacts d'urgence vérifiés
+- [ ] War room Slack/Zoom fonctionnel
+- [ ] Backups testés (restore drill trimestriel)
+- [ ] Forensics image snapshot procedure documentée
+- [ ] Clés de secours Vault générées et stockées hors site
+- [ ] Playbooks containment testés en staging
+- [ ] Équipe formée (tabletop exercise semestriel)
+- [ ] Communication templates à jour
+- [ ] Légal/Compliance validé processus notification
+
 ## Agrégation des Logs
 
 L'API envoie les logs vers Loki pour :
