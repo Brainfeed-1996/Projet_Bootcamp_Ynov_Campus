@@ -1708,6 +1708,138 @@ ORDER BY t.relname;
 
 ---
 
+## Schéma de base de données — référence d'implémentation
+
+Cette section décrit le schéma **actuellement implémenté** dans `app.py`. Elle fait autorité pour les opérations courantes ; les champs et relations présentés ailleurs comme évolutions futures ne doivent pas être supposés présents en base.
+
+### Moteurs et initialisation
+
+| Environnement | Moteur | Initialisation |
+|---------------|--------|----------------|
+| Production | PostgreSQL 15+ via `DATABASE_URL` ou `DB_USER`/`DB_PASSWORD` | `Base.metadata.create_all()` au démarrage |
+| Tests | SQLite en mémoire avec `TESTING=1` | `Base.metadata.create_all()` puis `drop_all()` dans les fixtures |
+| Développement Docker | PostgreSQL 15, base `music_hall` | script d'initialisation monté dans `compose.yaml` |
+
+`create_all()` crée les tables absentes, mais n'altère pas les colonnes existantes. Un changement de type, de contrainte ou de nom de colonne nécessite donc une migration explicite et une sauvegarde préalable.
+
+### Diagramme logique actuel
+
+```text
++---------------------------+       +---------------------------+
+| users                     |       | logs                      |
+|---------------------------|       |---------------------------|
+| id PK                     |       | id PK                     |
+| username UNIQUE NOT NULL  |       | level NOT NULL            |
+| email UNIQUE NOT NULL     |       | message TEXT NOT NULL     |
+| password_hash NOT NULL    |       | source                    |
+| is_active DEFAULT true    |       | created_at                |
+| created_at                |       +---------------------------+
++---------------------------+
+
++---------------------------+
+| analyses                  |
+|---------------------------|
+| id PK                     |
+| type NOT NULL             |
+| input_data                |
+| result                    |
+| created_at                |
++---------------------------+
+```
+
+Aucune clé étrangère ni relation SQLAlchemy n'est actuellement déclarée entre ces trois tables. Le champ `log_id` renvoyé par `POST /logs/{log_id}/analyze` est une valeur de réponse ; il n'est pas persisté dans `analyses`.
+
+### Table `users`
+
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+|---------|-----------------|----------|--------------------------------|-------|
+| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant interne |
+| `username` | `String(50)` | Non | index unique | connexion et affichage |
+| `email` | `String(120)` | Non | index unique | récupération et contact |
+| `password_hash` | `String(256)` | Non | bcrypt, coût 12 | authentification ; aucun mot de passe clair |
+| `is_active` | `Boolean` | Oui | `True` | désactivation logique des comptes |
+| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de création |
+
+Indexes déclarés :
+
+- `ix_users_username` : unicité de `username`.
+- `ix_users_email` : unicité de `email`.
+
+La création d'un utilisateur est validée par `UserCreate` : nom de 3 à 50 caractères, email valide et mot de passe d'au moins 8 caractères. La suppression par l'API positionne `is_active` à `False` ; elle ne supprime pas la ligne.
+
+### Table `logs`
+
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+|---------|-----------------|----------|--------------------------------|-------|
+| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant du log |
+| `level` | `String(20)` | Non | — | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `message` | `Text` | Non | longueur applicative maximale : 4096 | contenu ingéré |
+| `source` | `String(100)` | Oui | valeur applicative par défaut : `unknown` | origine du log |
+| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date d'ingestion |
+
+Indexes déclarés :
+
+- `ix_logs_level`
+- `ix_logs_source`
+- `ix_logs_created_at`
+- `ix_logs_level_created_at`
+- `ix_logs_source_created_at`
+- `ix_logs_level_source_created_at`
+
+Les validations de niveau, de longueur et de source sont appliquées avant insertion par Pydantic et par les endpoints bulk/CSV. Le modèle ne contient pas de colonne `log_metadata` ni de colonne `user_id` dans l'implémentation actuelle.
+
+### Table `analyses`
+
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+|---------|-----------------|----------|--------------------------------|-------|
+| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant de l'analyse |
+| `type` | `String(50)` | Non | — | type d'analyse, par exemple `log_analysis` |
+| `input_data` | `Text` | Oui | — | donnée d'entrée conservée |
+| `result` | `Text` | Oui | — | résultat JSON sérialisé du provider |
+| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de création |
+
+`POST /logs/{log_id}/analyze` vérifie d'abord que le log existe, appelle le provider, puis insère une ligne dans `analyses`. La réponse contient `log_id`, mais la table ne possède pas de colonne correspondante. `POST /analyses` accepte un objet contenant au moins `type` et conserve éventuellement `input_data` et `result`.
+
+Le contenu de `result` suit le contrat `AnalysisResult` : `severity`, `category`, `summary`, `recommendations` et `provider`. Il doit être traité comme du JSON stocké dans du texte, et non comme une colonne JSON typée.
+
+### Relations, requêtes et rétention
+
+- La relation `logs` ? `analyses` est **logique et applicative**, pas référentielle en base.
+- Les utilisateurs et les logs sont indépendants ; aucune attribution d'auteur n'est persistée.
+- Les listes sont triées par `created_at DESC` dans les endpoints de lecture.
+- `CleanupService` supprime les logs et analyses antérieurs à un seuil configurable, par défaut 90 jours. Les utilisateurs ne sont pas supprimés automatiquement par ce service.
+- Les exports et rapports lisent les tables via SQLAlchemy ; ils ne doivent pas contourner les validations d'entrée de l'API.
+
+Exemples d'inspection :
+
+```bash
+# PostgreSQL Docker
+docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c "\\d+ users"
+docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c "\\d+ logs"
+docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c "\\d+ analyses"
+
+# Volumes et cardinalités
+docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c \
+  "SELECT 'users' AS table_name, count(*) FROM users
+   UNION ALL SELECT 'logs', count(*) FROM logs
+   UNION ALL SELECT 'analyses', count(*) FROM analyses;"
+```
+
+### Évolution du schéma
+
+Pour toute modification :
+
+1. Sauvegarder la base et valider la restauration dans un environnement isolé.
+2. Ajouter ou modifier les modèles SQLAlchemy et les schémas Pydantic associés.
+3. Écrire une migration PostgreSQL explicite pour les changements destructifs ou incompatibles.
+4. Mettre à jour les tests d'intégration, les exports, les requêtes d'administration et la présente référence.
+5. Déployer la migration avant la version applicative qui dépend de la nouvelle colonne.
+6. Vérifier les indexes, les contraintes, les performances et la rétention après déploiement.
+
+Évolutions à ne pas considérer comme disponibles aujourd'hui : `role` sur `users`, `log_metadata` sur `logs`, `user_id` sur `logs`, clé étrangère `analyses.log_id`, partitionnement mensuel et recherche full-text.
+
+---
+
 ## Contribuer
 
 ### Avant de committer
