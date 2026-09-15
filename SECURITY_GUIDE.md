@@ -403,6 +403,72 @@ Les données sont supprimées automatiquement après la période.
 
 Ce runbook détaille les procédures opérationnelles pour répondre aux incidents de sécurité sur Log Sentinel API.
 
+### 0. Procédure opérationnelle
+
+> Objectif : contenir rapidement l'impact, préserver les preuves et restaurer un service vérifiable sans détruire les indices. Toutes les heures sont en UTC. Ne copiez jamais de secret, token ou donnée personnelle dans le ticket d'incident.
+
+#### 0.1 Ouvrir et qualifier l'incident
+
+1. Créer un identifiant unique (`INC-AAAAMMJJ-XXX`) et un canal privé dédié.
+2. Nommer un **Incident Commander (IC)** responsable des décisions, une personne en charge de la technique et une personne en charge de la communication.
+3. Noter l'heure de détection, la source de l'alerte, les services touchés, le périmètre supposé et le niveau de sévérité.
+4. Classer l'incident :
+
+| Niveau | Critère d'entrée | Réponse cible | Exemple |
+|--------|------------------|---------------|---------|
+| **P0** | compromission active, fuite confirmée, perte ou corruption de données, indisponibilité critique | 15 minutes | secret de production exposé, injection SQL réussie |
+| **P1** | exploitation probable ou dégradation majeure | 1 heure | bypass d'authentification, DoS efficace |
+| **P2** | anomalie contenue ou tentative bloquée | 4 heures | scan, pic de 429, erreur isolée |
+| **P3** | événement sans impact confirmé | 24 heures | rejet CSV, tentative de connexion échouée |
+
+5. Ouvrir une chronologie partagée. Chaque action doit avoir un horodatage, un auteur, une commande ou une décision et son résultat.
+
+#### 0.2 Préserver les preuves avant toute correction
+
+- Capturer l'état des services et des conteneurs avant de redémarrer ou supprimer une ressource :
+
+```bash
+date -u +%FT%TZ
+docker compose -f compose.yaml -f docker-compose.production.yml ps
+docker compose -f compose.yaml -f docker-compose.production.yml logs --since=2h web > "INC-<id>_web_$(date -u +%Y%m%dT%H%M%SZ).log"
+docker compose -f compose.yaml -f docker-compose.production.yml logs --since=2h db > "INC-<id>_db_$(date -u +%Y%m%dT%H%M%SZ).log"
+```
+
+- Exporter les métriques et les traces pertinentes depuis Prometheus, Loki et Jaeger ; conserver les requêtes utilisées.
+- Faire un snapshot ou un `pg_dump` de la base dans un emplacement contrôlé, chiffré et limité aux personnes autorisées.
+- Conserver les images, versions de déploiement, tags Git, identifiants de conteneurs et horodatages. Ne pas exécuter de nettoyage, rotation ou suppression tant que l'IC n'a pas validé la préservation.
+- Journaliser les accès aux preuves et appliquer le principe du moindre privilège. Une preuve ne doit jamais être modifiée dans son emplacement d'origine.
+
+#### 0.3 Contenir, éradiquer et restaurer
+
+| Phase | Actions minimales | Critère de sortie |
+|-------|-------------------|-------------------|
+| **Containment** | retirer le token exposé, bloquer l'adresse ou la route abusive, activer le mode maintenance, isoler le composant touché | l'attaque ne peut plus progresser ; le périmètre est connu |
+| **Éradication** | corriger la cause racine, révoquer les credentials, supprimer l'accès non autorisé, scanner l'image et les dépendances | aucun indicateur de compromission actif ; les correctifs sont revus |
+| **Restauration** | déployer une version connue saine, restaurer les données depuis une sauvegarde validée, réactiver progressivement le trafic | `/health` est sain, les contrôles de sécurité passent, le trafic est surveillé |
+| **Surveillance renforcée** | suivre erreurs, latence, authentification, ingestion, DB et providers pendant au moins 72 h pour un P0/P1 | aucun signal de récidive pendant la fenêtre définie |
+
+Toute décision destructive (suppression de compte, rotation de clé, restauration, purge) doit être approuvée par l'IC et consignée. Si la cause n'est pas comprise, privilégier l'isolement à une correction empirique.
+
+#### 0.4 Communication et escalade
+
+- Publier un premier statut dans le canal d'incident avec : identifiant, niveau, impact connu, heure de début, IC, actions en cours et prochaine mise à jour.
+- Pour P0, envoyer une mise à jour au moins toutes les 30 minutes ; pour P1, toutes les heures.
+- La communication externe et la notification réglementaire sont coordonnées par les rôles Communication et Legal/Compliance. Ne jamais divulguer de détail technique ou de donnée sensible avant validation.
+- Escalader immédiatement au CISO, à la direction et au responsable juridique pour une fuite de données, une compromission de secret ou un impact client confirmé.
+
+#### 0.5 Clôture et revue post-incident
+
+L'IC ne clôture l'incident qu'après vérification de la santé, des accès, des sauvegardes, des journaux et des alertes. Une revue post-incident doit avoir lieu sous 48 heures et produire :
+
+- une chronologie validée et une cause racine ;
+- l'impact mesuré (utilisateurs, données, durée, disponibilité) ;
+- les actions correctives avec propriétaire et échéance ;
+- les règles de détection, tests de régression et exercices de simulation manquants ;
+- la mise à jour du présent runbook et des seuils d'alerte.
+
+Les actions de suivi sont suivies comme des éléments de travail distincts ; une simple fermeture de ticket ne constitue pas une clôture opérationnelle.
+
 ### 1. Classification des Incidents
 
 | Niveau | Critères | Exemples | Temps de réponse | Escalade |
