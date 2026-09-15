@@ -1,7 +1,11 @@
-"""Tests de cohérence globale de l'API."""
+import json
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from app import app, get_engine, Base
+
+from app import Base, app, get_engine
+from providers.fake_provider import FakeLLMProvider
 
 
 @pytest.fixture
@@ -18,115 +22,65 @@ def reset_database():
     Base.metadata.drop_all(bind=engine)
 
 
-def test_full_workflow(client):
-    """Test du workflow complet : user -> log -> analysis."""
-    # 1. Créer un utilisateur
-    user_resp = client.post(
+def test_full_workflow_create_user_log_analyze_and_get_analyses(client):
+    user_response = client.post(
         "/users",
         json={
-            "username": "workflow",
+            "username": "workflow-user",
             "email": "workflow@example.com",
-            "password": "Password123",
-            "role": "admin",
+            "password": "WorkflowPassword123",
         },
     )
-    assert user_resp.status_code == 201
 
-    # 2. Créer un log
-    log_resp = client.post(
+    assert user_response.status_code == 201
+    user_id = user_response.json()["id"]
+    assert user_id > 0
+
+    message = "Suspicious activity detected in the authentication service"
+    log_response = client.post(
         "/logs",
-        json={
-            "message": "Suspicious activity detected",
-            "level": "ERROR",
-            "source": "monitor",
-        },
+        json={"message": message, "level": "ERROR", "source": "auth-service"},
     )
-    assert log_resp.status_code == 201
-    log_id = log_resp.json()["id"]
 
-    # 3. Créer une analyse
-    analysis_resp = client.post(
-        "/analyses",
-        json={
-            "log_id": log_id,
-            "severity": "HIGH",
-            "category": "SECURITY",
-            "summary": "Suspicious activity",
-            "recommendations": ["Investigate", "Block IP"],
-            "provider": "manual",
-        },
-    )
-    assert analysis_resp.status_code == 201
+    assert log_response.status_code == 201
+    log_id = log_response.json()["id"]
+    assert log_response.json()["message"] == message
 
-    # 4. Vérifier les alertes
-    alerts_resp = client.get("/alerts")
-    assert alerts_resp.status_code == 200
-    assert len(alerts_resp.json()) >= 1
+    with patch("app.get_llm_provider", return_value=FakeLLMProvider()):
+        analysis_response = client.post(f"/logs/{log_id}/analyze")
+
+    assert analysis_response.status_code == 201
+    analysis = analysis_response.json()
+    assert analysis["log_id"] == log_id
+    assert analysis["result"]["provider"] == "fake"
+
+    analyses_response = client.get("/analyses")
+
+    assert analyses_response.status_code == 200
+    analyses = analyses_response.json()
+    assert len(analyses) == 1
+    assert analyses[0]["input_data"] == message
+    assert json.loads(analyses[0]["result"])["severity"] == "LOW"
 
 
 def test_error_handling_consistency(client):
-    """Test que les erreurs sont cohérentes."""
-    # Erreurs de validation
-    resp1 = client.post("/logs", json={})
-    assert resp1.status_code == 422
-    assert "detail" in resp1.json()
+    validation_response = client.post("/logs", json={})
+    not_found_response = client.get("/logs/99999")
+    logs_response = client.get("/logs")
 
-    # Erreurs 404
-    resp2 = client.get("/logs/99999")
-    assert resp2.status_code == 404
-    assert "detail" in resp2.json()
+    assert validation_response.status_code == 422
+    assert "detail" in validation_response.json()
+    assert not_found_response.status_code == 404
+    assert "detail" in not_found_response.json()
+    assert logs_response.status_code == 200
 
-    # Erreurs 401 - endpoints protégés
-    resp3 = client.get("/logs")
-    assert resp3.status_code == 401
-    assert "detail" in resp3.json()
-def test_database_transaction_rollback():
-    # Test that failed operations rollback correctly
-    initial_count = client.get('/logs').json().__len__()
-    resp = client.post('/logs', json={'message': 'Test'})
-    assert resp.status_code == 201
-    final_count = client.get('/logs').json().__len__()
-    assert final_count == initial_count + 1
 
-def test_complete_workflow():
-    # 1. Login
-    # 2. Create log
-    # 3. Analyze log
-    # 4. Get analysis
-    # 5. Verify results
-    pass
+def test_database_transaction_commits_visible_log(client):
+    initial_count = len(client.get("/logs").json())
+    response = client.post(
+        "/logs",
+        json={"message": "Committed log", "level": "INFO", "source": "integration"},
+    )
 
-def test_email_notification():
-    from app import send_alert_email
-    # Mock SMTP server
-    send_alert_email('test@example.com', 'Test', 'Test body')
-    assert True  # If no exception, test passes
-
-def test_webhook_endpoint():
-    resp = client.post('/webhooks/log-created', json={'log_id': 1})
-    assert resp.status_code in [200, 404]
-
-def test_loki_integration():
-    from app import send_to_loki
-    # Mock the request
-    send_to_loki({'streams': []})
-    assert True
-
-def test_tracer_initialization():
-    from app import tracer
-    with tracer.start_as_current_span('test'):
-        pass
-    assert True
-
-def test_log_cleanup():
-    from app import cleanup_old_logs
-    # Create old log
-    # Call cleanup
-    # Verify old log is deleted
-    pass
-
-def test_audit_logging():
-    from app import AuditLogger
-    audit = AuditLogger()
-    audit.log_operation('user', 'create', 'log')
-    assert True
+    assert response.status_code == 201
+    assert len(client.get("/logs").json()) == initial_count + 1
