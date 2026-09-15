@@ -124,6 +124,13 @@ SENSITIVE_PATTERNS = [
 ]
 
 
+def sanitize_log_message(message: str) -> str:
+    sanitized = message
+    for pattern, replacement in SENSITIVE_PATTERNS:
+        sanitized = pattern.sub(replacement, sanitized)
+    return sanitized
+
+
 def _read_secret_from_file(env_var: str, file_env_var: str, default: str = "") -> str:
     file_path = os.environ.get(file_env_var)
     if file_path and os.path.isfile(file_path):

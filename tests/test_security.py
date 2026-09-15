@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from app import Base, app, get_engine
+from app import Base, app, get_engine, sanitize_log_message
 
 
 @pytest.fixture
@@ -98,3 +98,51 @@ def test_csrf_middleware_allows_api_json_requests(client):
     )
 
     assert response.status_code in {200, 201, 400, 422}
+
+
+def test_ip_redaction_from_log_message(client):
+    ip = "192.168.1.100"
+    message = f"Connection from {ip}"
+    sanitized = sanitize_log_message(message)
+    assert ip not in sanitized
+    assert "[IP_REDACTED]" in sanitized
+
+
+def test_email_redaction_from_log_message(client):
+    email = "john.doe@example.com"
+    message = f"Contact {email} for details"
+    sanitized = sanitize_log_message(message)
+    assert email not in sanitized
+    assert "[EMAIL_REDACTED]" in sanitized
+
+
+def test_password_redaction_from_log_message(client):
+    message = "password=supersecret"
+    sanitized = sanitize_log_message(message)
+    assert "supersecret" not in sanitized
+    assert "[CREDENTIAL_REDACTED]" in sanitized
+
+
+def test_credit_card_redaction_from_log_message(client):
+    card = "4111-1111-1111-1111"
+    message = f"Card number: {card}"
+    sanitized = sanitize_log_message(message)
+    assert card not in sanitized
+    assert "[CARD_REDACTED]" in sanitized
+
+
+def test_multiple_sensitive_data_redaction(client):
+    message = "User 10.0.0.1 emailed admin@secret.com with pwd=test123"
+    sanitized = sanitize_log_message(message)
+    assert "10.0.0.1" not in sanitized
+    assert "admin@secret.com" not in sanitized
+    assert "test123" not in sanitized
+    assert "[IP_REDACTED]" in sanitized
+    assert "[EMAIL_REDACTED]" in sanitized
+    assert "[CREDENTIAL_REDACTED]" in sanitized
+
+
+def test_redaction_plain_message_unchanged(client):
+    message = "System started successfully"
+    sanitized = sanitize_log_message(message)
+    assert sanitized == message
