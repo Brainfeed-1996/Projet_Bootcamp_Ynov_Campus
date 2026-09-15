@@ -4,6 +4,9 @@ from fastapi.testclient import TestClient
 from app import app
 
 
+API_KEY = "key123"
+
+
 @pytest.fixture
 def client():
     return TestClient(app)
@@ -65,7 +68,7 @@ def test_webhook_log_created(client):
         'level': 'ERROR',
         'message': 'Test webhook message',
         'source': 'api',
-    })
+    }, headers={'X-API-Key': API_KEY})
     assert resp.status_code == 202
     assert resp.json()['status'] == 'received'
 
@@ -78,7 +81,7 @@ def test_webhook_invalid_level(client):
         'level': 'INVALID',
         'message': 'Test',
         'source': 'api',
-    })
+    }, headers={'X-API-Key': API_KEY})
     assert resp.status_code == 422
 
 
@@ -87,11 +90,28 @@ def test_webhook_missing_fields(client):
     resp = client.post('/webhooks/log-created', json={
         'event': 'log-created',
         'log_id': 1,
-    })
+    }, headers={'X-API-Key': API_KEY})
     assert resp.status_code == 422
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+
+def test_api_key_missing(client):
+    """Route protégée sans API key."""
+    resp = client.post('/admin/alerts', json={
+        'to_email': 'test@example.com',
+        'subject': 'Test',
+        'body': 'Test body',
+    })
+    assert resp.status_code == 401
+
+
+def test_api_key_invalid(client):
+    """Route protégée avec une API key invalide."""
+    resp = client.post('/admin/alerts', json={
+        'to_email': 'test@example.com',
+        'subject': 'Test',
+        'body': 'Test body',
+    }, headers={'X-API-Key': 'wrong-key'})
+    assert resp.status_code == 401
 
 
 def test_admin_alerts_invalid_email(client):
@@ -100,7 +120,7 @@ def test_admin_alerts_invalid_email(client):
         'to_email': 'not-an-email',
         'subject': 'Test',
         'body': 'Test body',
-    })
+    }, headers={'X-API-Key': API_KEY})
     assert resp.status_code == 422
 
 
@@ -108,5 +128,9 @@ def test_admin_alerts_missing_fields(client):
     """Alerte email avec des champs manquants."""
     resp = client.post('/admin/alerts', json={
         'to_email': 'test@example.com',
-    })
+    }, headers={'X-API-Key': API_KEY})
     assert resp.status_code == 422
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

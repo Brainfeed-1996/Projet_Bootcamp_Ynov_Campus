@@ -555,6 +555,131 @@ services:
 
 ---
 
+### Procédures de Déploiement Avancées
+
+#### Blue-Green Deployment
+
+```bash
+# 1. Déployer la nouvelle version (green)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --build web
+
+# 2. Vérifier la santé du green
+curl -f http://localhost:5000/health
+docker compose -f compose.yaml -f docker-compose.production.yml ps web
+
+# 3. Switch du traffic (via LB/NGINX)
+# NGINX: upstream green { server <green-ip>:5000; } + active
+
+# 4. Monitorer 15 minutes
+docker compose -f compose.yaml -f docker-compose.production.yml logs -f web --since=15m
+
+# 5. Si OK : promouvoir green ? production
+#    (tag le conteneur green comme production)
+docker tag log-sentinel:latest log-sentinel:v1.2.0
+
+# 6. Si KO : rollback vers blue (v1.1.0)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --scale web=3 log-sentinel:v1.1.0
+```
+
+#### Canary Deployment
+
+```yaml
+# docker-compose.production.yml - Route 10% vers canary
+# Via NGINX ou Traefik weighted routing:
+# canary_weight: 10, stable_weight: 90
+# Métriques à surveiller : erreurs, latence, CPU/mémoire
+```
+
+#### Disaster Recovery
+
+| Scénario | RTO (Recovery Time) | RPO (Recovery Point) | Procédure |
+|----------|---------------------|----------------------|-----------|
+| Perte totale DB | < 15 min | < 1h | Restaurer depuis backup S3 + WAL |
+| Perte totale app | < 5 min | 0 | Redéployer Docker Compose |
+| Perte totale Vault | < 30 min | < 1h | Restaurer depuis snapshot Vault |
+| Région entière | < 1h | < 4h | Failover multi-région (plan B) |
+| Ransomware | < 2h | < 24h | Restore depuis backup air-gapped |
+
+**Procédure de Restauration Complète :**
+```bash
+# 1. Arrêter l'environnement
+docker compose -f compose.yaml -f docker-compose.production.yml down
+
+# 2. Restaurer la base depuis backup
+docker volume create postgres_data_restored
+docker run --rm -v postgres_data_restored:/var/lib/postgresql/data \
+  -v /backups:/backups postgres:15-alpine \
+  bash -c "pg_restore -U log_sentinel -d log_sentinel /backups/backup_latest.sql"
+
+# 3. Restaurer les secrets
+cp backups/secrets_backup_*.txt secrets/
+chmod 400 secrets/*.txt
+
+# 4. Redémarrer
+docker compose -f compose.yaml -f docker-compose.production.yml up -d
+
+# 5. Vérifications
+curl -f http://localhost:5000/health
+docker compose -f compose.yaml -f docker-compose.production.yml ps
+```
+
+#### Scaling Horizontal
+
+```bash
+# Scale web (ajouter des replicas)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale web=6
+
+# Scale db (read replicas via Pooler)
+# PgBouncer ou Supavisor pour connection pooling
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale db=1
+
+# Vérifier la distribution
+docker compose -f compose.yaml -f docker-compose.production.yml ps -a
+```
+
+#### Tuning de Performance
+
+```bash
+# 1. Connection pooling (PgBouncer)
+docker volume create pgbouncer_data
+docker compose -f compose.yaml -f docker-compose.production.yml up -d pgbouncer
+
+# 2. Monitoring des requêtes lentes
+docker exec db psql -U postgres -d log_sentinel -c "
+  SELECT query, mean_exec_time, calls
+  FROM pg_stat_statements
+  ORDER BY mean_exec_time DESC
+  LIMIT 10;"
+
+# 3. VACUUM et ANALYZE programmés
+docker exec db psql -U postgres -d log_sentinel -c "VACUUM ANALYZE logs;"
+docker exec db psql -U postgres -d log_sentinel -c "VACUUM ANALYZE analyses;"
+
+# 4. Index recommandés pour gros volumes
+docker exec db psql -U postgres -d log_sentinel -c "
+  CREATE INDEX IF NOT EXISTS idx_logs_created_at_2
+  ON logs(created_at DESC) WHERE level = 'ERROR';"
+```
+
+#### Rolling Update (zero-downtime)
+
+```bash
+# 1. Pull la nouvelle image
+docker compose -f compose.yaml -f docker-compose.production.yml pull web
+
+# 2. Mise à jour progressive (1 par 1)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
+
+# 3. Chaque conteneur passe par :
+#    - healthcheck OK ? reste
+#    - healthcheck FAIL ? rollback automatique
+
+# 4. Vérifier après chaque vague
+curl -f http://localhost:5000/health
+```
+
+---
+
 ## Endpoints
 
 Le provider LLM par dÃ©faut est `fake` (dÃ©terministe, sans rÃ©seau). Pour utiliser OpenAI ou Ollama, dÃ©finissez `LLM_PROVIDER=openai` ou `LLM_PROVIDER=ollama` avec les variables d'environnement requises.
