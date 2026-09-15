@@ -97,8 +97,6 @@ class OpenAILLMProvider(LLMProvider):
                 temperature=0,
                 timeout=self.timeout,
             )
-        except ProviderError:
-            raise
         except TimeoutError:
             raise ProviderTimeoutError("OpenAI request timed out") from None
         except (
@@ -123,8 +121,6 @@ class OpenAILLMProvider(LLMProvider):
             choice = choices[0]
             message_data = _lookup(choice, "message")
             content = _lookup(message_data, "content")
-        except ProviderError:
-            raise
         except (AttributeError, IndexError, KeyError, TypeError):
             raise ProviderResponseError(
                 "OpenAI response has an invalid completion structure"

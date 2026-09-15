@@ -130,8 +130,6 @@ class OllamaLLMProvider(LLMProvider):
                 json=payload,
                 timeout=self.timeout,
             )
-        except ProviderError:
-            raise
         except TimeoutError:
             raise ProviderTimeoutError("Ollama request timed out") from None
         except _HTTP_TIMEOUT:
@@ -166,8 +164,6 @@ class OllamaLLMProvider(LLMProvider):
 
         try:
             payload_data = _response_payload(response)
-        except ProviderError:
-            raise
         except (AttributeError, KeyError, RuntimeError, TypeError, ValueError):
             raise ProviderResponseError(
                 "Ollama response has an invalid structure"
