@@ -678,6 +678,106 @@ docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps 
 curl -f http://localhost:5000/health
 ```
 
+### Configuration SSL/TLS (Reverse Proxy)
+
+```nginx
+# nginx.conf - Frontend TLS termination
+server {
+    listen 443 ssl http2;
+    server_name api.logsentinel.io;
+
+    ssl_certificate /etc/letsencrypt/live/api.logsentinel.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/api.logsentinel.io/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # HSTS
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+
+    location / {
+        proxy_pass http://web:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+
+# HTTP ? HTTPS redirect
+server {
+    listen 80;
+    server_name api.logsentinel.io;
+    return 301 https://$server_name$request_uri;
+}
+```
+
+### Variables d'Environnement de Production (Récapitulatif)
+
+| Variable | Requis | Valeur Prod | Source | Exemple |
+|----------|--------|-------------|--------|---------|
+| `SECRET_KEY` | Oui | 64 hex chars | Vault | `openssl rand -hex 32` |
+| `DATABASE_URL` | Oui | PostgreSQL prod | Vault | `postgresql://user:pass@db:5432/log_sentinel` |
+| `DB_USER` | Oui | Utilisateur DB | Vault/Docker Secret | `log_sentinel` |
+| `DB_PASSWORD` | Oui | Mot de passe fort | Vault/Docker Secret | `openssl rand -hex 16` |
+| `DB_POOL_SIZE` | Non | 20 | `.env.production` | `20` |
+| `DB_MAX_OVERFLOW` | Non | 40 | `.env.production` | `40` |
+| `LLM_PROVIDER` | Oui | `fake`\|`openai`\|`ollama` | `.env.production` | `fake` |
+| `OPENAI_API_KEY` | Si OpenAI | Clé API valide | Vault/Docker Secret | `sk-...` |
+| `OLLAMA_BASE_URL` | Si Ollama | URL interne | `.env.production` | `http://ollama:11434` |
+| `RATE_LIMIT_AUTH` | Non | 10/minute | `.env.production` | `10/minute` |
+| `RATE_LIMIT_LOGS_WRITE` | Non | 50/minute | `.env.production` | `50/minute` |
+| `RATE_LIMIT_ANALYZE` | Non | 30/minute | `.env.production` | `30/minute` |
+| `RATE_LIMIT_DEFAULT` | Non | 100/minute | `.env.production` | `100/minute` |
+| `LOG_LEVEL` | Non | `INFO` | `.env.production` | `INFO` |
+| `PROMETHEUS_MULTIPROC_DIR` | Si metrics | Chemin tmp | `.env.production` | `/tmp/prometheus` |
+| `JAEGER_AGENT_HOST` | Si tracing | Service name | `.env.production` | `jaeger` |
+| `JAEGER_AGENT_PORT` | Si tracing | Port | `.env.production` | `6831` |
+| `LOKI_URL` | Si logs agg | Service URL | `.env.production` | `http://loki:3100` |
+
+### Structure des Secrets Docker (Production)
+
+```
+secrets/
+??? database_url.txt       # URL PostgreSQL complète (chmod 400)
+??? secret_key.txt         # Clé JWT (chmod 400)
+??? openai_api_key.txt     # Clé API OpenAI (chmod 400, optionnel)
+??? db_user.txt            # Utilisateur DB (chmod 400)
+??? db_password.txt        # Mot de passe DB (chmod 400)
+??? vault_root_token.txt   # Token root Vault (chmod 400)
+??? grafana_password.txt   # Mot de passe Grafana (chmod 400)
+```
+
+### Verification Post-Déploiement
+
+```bash
+# 1. Santé globale
+curl -f http://localhost:5000/health
+# {"status":"ok","database":"up"}
+
+# 2. Vérifier tous les conteneurs
+docker compose -f compose.yaml -f docker-compose.production.yml ps
+# TOUS doivent être "healthy"
+
+# 3. Vérifier les secrets montés
+docker compose -f compose.yaml -f docker-compose.production.yml exec web \
+  ls -la /run/secrets/
+
+# 4. Vérifier non-root
+docker compose -f compose.yaml -f docker-compose.production.yml exec web \
+  whoami
+# Doit retourner "appuser"
+
+# 5. Vérifier headers de sécurité
+curl -I https://api.logsentinel.io | grep -i "x-content\|x-frame\|x-xss\|strict"
+
+# 6. Vérifier rate limiting
+for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000/health; done
+# Les 11e+ doivent retourner 429
+```
+
 ---
 
 ## Endpoints
