@@ -759,11 +759,7 @@ async def ingest_csv(file: UploadFile, db: Session = Depends(get_db)):
             errors.append(f"Ligne {i} : level '{level}' invalide. Valeurs : {sorted(VALID_LEVELS)}")
             continue
         records.append({"message": message, "level": level, "source": source})
-    ingested = 0
-    for rec in records:
-        db.add(Log(**rec))
-        ingested += 1
-    db.commit()
+    ingested = bulk_insert_logs(db, records)
     return BulkResult(ingested=ingested, rejected=len(errors), errors=errors)
 
 
