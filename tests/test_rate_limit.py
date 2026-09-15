@@ -1,8 +1,11 @@
-"""Tests de rate limiting pour l'API."""
+from unittest.mock import patch
+
 import pytest
-import time
 from fastapi.testclient import TestClient
-from app import app, get_engine, Base
+from sqlalchemy import insert
+
+from app import Base, Log, app, get_engine
+from providers.fake_provider import FakeLLMProvider
 
 
 @pytest.fixture
@@ -19,31 +22,73 @@ def reset_database():
     Base.metadata.drop_all(bind=engine)
 
 
-def test_multiple_requests_limit(client):
-    """Test que le rate limiting fonctionne sur les endpoints sensibles."""
-    # Faire plusieurs requêtes rapides
-    responses = []
-    for _ in range(15):
-        resp = client.post(
-            "/auth/login",
-            data={"username": "nonexistent", "password": "wrong"},
+def _request_statuses(client, method, path, count, **kwargs):
+    request = getattr(client, method)
+    return [request(path, **kwargs).status_code for _ in range(count)]
+
+
+def test_auth_rate_limit_is_ten_requests_per_minute(client):
+    credentials = {"username": "rate-limit-user", "password": "wrong-password"}
+    headers = {"X-Forwarded-For": "198.51.100.10"}
+
+    statuses = _request_statuses(
+        client,
+        "post",
+        "/auth/login",
+        11,
+        json=credentials,
+        headers=headers,
+    )
+
+    assert all(status != 429 for status in statuses[:10])
+    assert statuses[10] == 429
+
+
+def test_log_write_rate_limit_is_fifty_requests_per_minute(client):
+    headers = {"X-Forwarded-For": "198.51.100.11"}
+    payload = {"message": "Rate limit log", "level": "INFO", "source": "rate-limit"}
+
+    statuses = _request_statuses(
+        client,
+        "post",
+        "/logs",
+        51,
+        json=payload,
+        headers=headers,
+    )
+
+    assert all(status != 429 for status in statuses[:50])
+    assert statuses[50] == 429
+
+
+def test_analyze_rate_limit_is_thirty_requests_per_minute(client):
+    with get_engine().begin() as connection:
+        connection.execute(
+            insert(Log),
+            {"level": "ERROR", "message": "Rate limit analysis", "source": "rate-limit"},
         )
-        responses.append(resp.status_code)
+    log_id = client.get("/logs").json()[0]["id"]
+    headers = {"X-Forwarded-For": "198.51.100.12"}
 
-    # Au moins une requête devrait être limitée
-    assert 429 in responses or all(code == 401 for code in responses)
+    with patch("app.get_llm_provider", return_value=FakeLLMProvider()):
+        statuses = _request_statuses(
+            client,
+            "post",
+            f"/logs/{log_id}/analyze",
+            31,
+            headers=headers,
+        )
+
+    assert all(status != 429 for status in statuses[:30])
+    assert statuses[30] == 429
 
 
-def test_health_not_rate_limited(client):
-    """Test que /health n'est pas rate limited."""
-    for _ in range(5):
-        resp = client.get("/health")
-        assert resp.status_code == 200
-def test_rate_limit_headers():
-    resp = client.get('/health')
-    assert 'X-RateLimit-Limit' in resp.headers or resp.status_code == 200
+def test_rate_limit_response_includes_policy_headers(client):
+    response = client.post(
+        "/logs",
+        json={"message": "Header check", "level": "INFO", "source": "rate-limit"},
+        headers={"X-Forwarded-For": "198.51.100.13"},
+    )
 
-def test_rate_limit_reset():
-    # Test that rate limit resets after window
-    resp = client.get('/health')
-    assert resp.status_code == 200
+    assert response.status_code in {200, 201}
+    assert response.headers.get("X-RateLimit-Limit") in {"50", "50/minute"}
