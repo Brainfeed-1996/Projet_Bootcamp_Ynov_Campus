@@ -343,10 +343,10 @@ def get_llm_provider():
 @app.get("/users/{user_id}", response_model=UserRead, tags=["Users"])
 def get_user(user_id: int, db: Session = Depends(get_db)):
     if user_id <= 0:
-        raise HTTPException(400, "ID utilisateur invalide (doit être > 0).")
+        return create_error_response(400, "ID utilisateur invalide (doit être > 0).")
     user = db.get(User, user_id)
     if not user or not user.is_active:
-        raise HTTPException(404, "Utilisateur introuvable.")
+        return create_error_response(404, "Utilisateur introuvable.")
     return user
 
 
@@ -357,7 +357,7 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
         {"u": payload.username, "e": payload.email},
     ).fetchone()
     if existing:
-        raise HTTPException(409, "Utilisateur ou email déjà existant.")
+        return create_error_response(409, "Utilisateur ou email déjà existant.")
     user = User(username=payload.username, email=payload.email)
     user.password_hash = hash_password(payload.password)
     db.add(user)
@@ -369,10 +369,10 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
 @app.delete("/users/{user_id}", tags=["Users"])
 def delete_user(user_id: int, db: Session = Depends(get_db)):
     if user_id <= 0:
-        raise HTTPException(400, "ID utilisateur invalide.")
+        return create_error_response(400, "ID utilisateur invalide.")
     user = db.get(User, user_id)
     if not user:
-        raise HTTPException(404, "Utilisateur introuvable.")
+        return create_error_response(404, "Utilisateur introuvable.")
     user.is_active = False
     db.commit()
     return {"id": user_id, "status": "deleted"}
@@ -387,11 +387,11 @@ def get_logs(
     db: Session = Depends(get_db),
 ):
     if limit < MIN_LIMIT or limit > MAX_LIMIT:
-        raise HTTPException(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
+        return create_error_response(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
     if level:
         level = level.upper()
         if level not in VALID_LEVELS:
-            raise HTTPException(400, f"level invalide : {level}. Valeurs : {sorted(VALID_LEVELS)}")
+            return create_error_response(400, f"level invalide : {level}. Valeurs : {sorted(VALID_LEVELS)}")
     stmt = select(Log)
     if level:
         stmt = stmt.where(Log.level == level)
@@ -429,10 +429,10 @@ def create_log(payload: LogCreate, db: Session = Depends(get_db)):
 @app.get("/logs/{log_id}", response_model=LogRead, tags=["Logs"])
 def get_log(log_id: int, db: Session = Depends(get_db)):
     if log_id <= 0:
-        raise HTTPException(400, "ID de log invalide.")
+        return create_error_response(400, "ID de log invalide.")
     log = db.get(Log, log_id)
     if not log:
-        raise HTTPException(404, "Log introuvable.")
+        return create_error_response(404, "Log introuvable.")
     return {
         "id": log.id,
         "level": log.level,
@@ -452,11 +452,11 @@ async def ingest_logs(request: Request, db: Session = Depends(get_db)):
     try:
         payload = await request.json()
     except (ValueError, json.JSONDecodeError):
-        raise HTTPException(400, "Corps JSON invalide.")
+        return create_error_response(400, "Corps JSON invalide.")
     if not isinstance(payload, list):
-        raise HTTPException(400, "Le corps doit être un tableau JSON de logs.")
+        return create_error_response(400, "Le corps doit être un tableau JSON de logs.")
     if len(payload) > MAX_BULK_ITEMS:
-        raise HTTPException(400, f"Trop d'éléments (max {MAX_BULK_ITEMS}).")
+        return create_error_response(400, f"Trop d'éléments (max {MAX_BULK_ITEMS}).")
     errors: list[str] = []
     ingested = 0
     for i, rec in enumerate(payload, start=1):
@@ -490,20 +490,20 @@ async def ingest_csv(file: UploadFile, db: Session = Depends(get_db)):
     Colonnes attendues : level,message,source
     """
     if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(400, "Seul le format CSV (.csv) est accepté.")
+        return create_error_response(400, "Seul le format CSV (.csv) est accepté.")
     content = await file.read()
     if len(content) > MAX_REQUEST_SIZE:
-        raise HTTPException(413, f"Fichier trop volumineux (max {MAX_REQUEST_SIZE} bytes).")
+        return create_error_response(413, f"Fichier trop volumineux (max {MAX_REQUEST_SIZE} bytes).")
 
     try:
         text_content = content.decode("utf-8")
     except UnicodeDecodeError:
-        raise HTTPException(400, "Encodage invalide : le CSV doit être en UTF-8.")
+        return create_error_response(400, "Encodage invalide : le CSV doit être en UTF-8.")
 
     reader = csv.DictReader(text_content.splitlines())
     required = {"message"}
     if reader.fieldnames is None or not required.issubset({(f or "").strip() for f in reader.fieldnames}):
-        raise HTTPException(
+        return create_error_response(
             422,
             "En-tête CSV invalide : la colonne 'message' est requise. "
             "Colonnes optionnelles : level, source.",
@@ -535,16 +535,16 @@ async def ingest_csv(file: UploadFile, db: Session = Depends(get_db)):
 @app.post("/logs/{log_id}/analyze", response_model=dict, status_code=201, tags=["Analyses"])
 def analyze_log(log_id: int, db: Session = Depends(get_db)):
     if log_id <= 0:
-        raise HTTPException(400, "ID de log invalide.")
+        return create_error_response(400, "ID de log invalide.")
     log = db.get(Log, log_id)
     if not log:
-        raise HTTPException(404, "Log introuvable.")
+        return create_error_response(404, "Log introuvable.")
     provider = get_llm_provider()
     try:
         result: AnalysisResult = provider.analyze(log.message)
     except (ProviderError, RuntimeError, ValueError, TimeoutError):
         logger.error("LLM analysis failed")
-        raise HTTPException(502, "Analyse IA indisponible.")
+        return create_error_response(502, "Analyse IA indisponible.")
     analyse = Analyse(
         type="log_analysis",
         input_data=log.message,
@@ -564,7 +564,7 @@ def analyze_log(log_id: int, db: Session = Depends(get_db)):
 @app.get("/analyses", response_model=list[AnalyseRead], tags=["Analyses"])
 def get_analyses(limit: int = 50, db: Session = Depends(get_db)):
     if limit < MIN_LIMIT or limit > MAX_LIMIT:
-        raise HTTPException(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
+        return create_error_response(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
     stmt = select(Analyse).order_by(Analyse.created_at.desc()).limit(limit)
     rows = db.execute(stmt).scalars().all()
     return [
@@ -582,7 +582,7 @@ def get_analyses(limit: int = 50, db: Session = Depends(get_db)):
 @app.post("/analyses", response_model=AnalyseRead, status_code=201, tags=["Analyses"])
 def create_analyse(payload: dict, db: Session = Depends(get_db)):
     if "type" not in payload:
-        raise HTTPException(400, "Champ 'type' requis.")
+        return create_error_response(400, "Champ 'type' requis.")
     analyse_type = payload["type"]
     input_data = payload.get("input_data", "")
     result = payload.get("result", "")
@@ -636,3 +636,223 @@ async def internal_server_error_handler(request: Request, exc: Exception):
     )
 
 
+def create_error_response(status_code: int, message: str, context: dict = None) -> JSONResponse:
+    content = {"detail": message}
+    if context:
+        content["context"] = context
+    return JSONResponse(status_code=status_code, content=content)
+
+
+
+# --- Routes monitoring, export, webhooks, admin ---
+
+from io import StringIO
+from fastapi.responses import StreamingResponse
+
+try:
+    import structlog
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt='iso'),
+            structlog.processors.JSONRenderer()
+        ],
+        logger_factory=structlog.PrintLoggerFactory(),
+    )
+except ImportError:
+    structlog = None
+
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+from sqlalchemy import func
+
+
+class WebhookPayload(BaseModel):
+    event: str = Field(..., description="Type d'evenement")
+    log_id: int = Field(..., description="Identifiant du log")
+    level: str = Field(..., description="Niveau de severite")
+    message: str = Field(..., min_length=1, max_length=4096, description="Message du log")
+    source: str = Field("unknown", min_length=1, max_length=100, description="Source du log")
+    timestamp: Optional[datetime] = Field(None, description="Horodatage")
+
+    @field_validator("level")
+    @classmethod
+    def check_level(cls, v: str) -> str:
+        v = v.upper()
+        if v not in VALID_LEVELS:
+            raise ValueError(f"level invalide")
+        return v
+
+
+@app.get('/metrics', tags=['Monitoring'])
+def get_metrics(db: Session = Depends(get_db)):
+    total_logs = db.execute(select(func.count(Log.id))).scalar() or 0
+    total_analyses = db.execute(select(func.count(Analyse.id))).scalar() or 0
+    return {
+        'total_requests': 0,
+        'total_logs': total_logs,
+        'total_analyses': total_analyses,
+        'rate_limiting': RATE_LIMIT_DEFAULT,
+    }
+
+
+@app.get('/health/detailed', tags=['Monitoring'])
+def detailed_health():
+    checks = {
+        'database': check_db(),
+        'openai': check_openai(),
+        'ollama': check_ollama(),
+    }
+    return {'status': 'ok' if all(checks.values()) else 'degraded', 'checks': checks}
+
+
+def check_db() -> bool:
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text('SELECT 1'))
+        return True
+    except SQLAlchemyError:
+        return False
+
+
+def check_openai() -> bool:
+    return os.environ.get('OPENAI_API_KEY') is not None
+
+
+def check_ollama() -> bool:
+    return os.environ.get('OLLAMA_BASE_URL') is not None
+
+
+@app.get('/export/logs', tags=['Export'])
+def export_logs(format: str = 'json', db: Session = Depends(get_db)):
+    if format not in ('json', 'csv'):
+        return create_error_response(400, "Format invalide : 'json' ou 'csv' uniquement.")
+    logs = db.execute(select(Log)).scalars().all()
+    if format == 'json':
+        return [
+            {
+                'id': log.id,
+                'level': log.level,
+                'message': log.message,
+                'source': log.source,
+                'created_at': log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ]
+    def generate():
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
+        for log in logs:
+            writer.writerow([
+                log.id, log.level, log.message, log.source or '',
+                log.created_at.isoformat() if log.created_at else '',
+            ])
+            output.seek(0)
+            data = output.read()
+            output.seek(0)
+            output.truncate(0)
+            yield data
+    return StreamingResponse(generate(), media_type='text/csv')
+
+
+@app.post('/webhooks/log-created', status_code=202, tags=['Webhooks'])
+def handle_log_webhook(payload: WebhookPayload, db: Session = Depends(get_db)):
+    log = db.get(Log, payload.log_id)
+    if log:
+        logger.info('Webhook log-created recu pour log_id=%s', payload.log_id)
+    else:
+        logger.warning('Webhook log-created pour log_id=%s introuvable', payload.log_id)
+    return {'status': 'received', 'log_id': payload.log_id, 'event': payload.event}
+
+
+@app.post('/admin/cleanup', tags=['Admin'])
+def cleanup_old_data(days: int = 90, db: Session = Depends(get_db)):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    logs_deleted = db.execute(Log.__table__.delete().where(Log.created_at < cutoff)).rowcount
+    analyses_deleted = db.execute(Analyse.__table__.delete().where(Analyse.created_at < cutoff)).rowcount
+    db.commit()
+    return {'logs_deleted': logs_deleted, 'analyses_deleted': analyses_deleted, 'cutoff_days': days}
+
+
+class EmailService:
+    def __init__(self, smtp_server: str = None, port: int = 587):
+        self.smtp_server = smtp_server or os.environ.get('SMTP_SERVER', 'localhost')
+        self.port = port
+
+    def send(self, to: str, subject: str, body: str):
+        msg = MIMEText(body)
+        msg['Subject'] = subject
+        msg['To'] = to
+        with smtplib.SMTP(self.smtp_server, self.port) as server:
+            server.send_message(msg)
+
+
+@app.post('/admin/alerts', tags=['Admin'])
+def send_alert_email_endpoint(to_email: str, subject: str, body: str):
+    service = EmailService()
+    service.send(to_email, subject, body)
+    return {'status': 'sent', 'to': to_email}
+
+
+API_KEYS = {
+    'service_a': 'key123',
+    'service_b': 'key456',
+}
+
+
+def validate_api_key(api_key: str) -> bool:
+    return api_key in API_KEYS.values()
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        response.headers['X-Request-ID'] = request_id
+        return response
+
+
+def cleanup_old_logs(db, days: int = 90):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
+    db.commit()
+
+
+class CleanupService:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def cleanup_old_logs(self, days: int = 90):
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        self.db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
+        self.db.commit()
+
+    def cleanup_old_analyses(self, days: int = 90):
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        self.db.execute(Analyse.__table__.delete().where(Analyse.created_at < cutoff))
+        self.db.commit()
+
+
+def stream_logs_as_csv(db: Session):
+    def generate():
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
+        for log in db.execute(select(Log)).scalars():
+            writer.writerow([
+                log.id, log.level, log.message, log.source or '',
+                log.created_at.isoformat() if log.created_at else '',
+            ])
+            output.seek(0)
+            data = output.read()
+            output.seek(0)
+            output.truncate(0)
+            yield data
+    return StreamingResponse(generate(), media_type='text/csv')
+
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host='0.0.0.0', port=5000)
