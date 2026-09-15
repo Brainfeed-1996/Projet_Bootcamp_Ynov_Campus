@@ -801,6 +801,94 @@ docker compose exec web lsof -i
 - [ ] Communication templates à jour
 - [ ] Légal/Compliance validé processus notification
 
+### 9. Exercices de Simulation (Tabletop)
+
+#### Scénarios d'Exercice Trimestriels
+
+| Scénario | Niveau | Durée | Participants | Objectif |
+|----------|--------|-------|--------------|----------|
+| **Secret leak** | P0 | 30 min | IC, Security, DevOps | Tester rotation secrets + notification |
+| **DoS simulé** | P1 | 45 min | IC, DevOps, QA | Tester scaling + rate limiting |
+| **Fuite PII** | P0 | 60 min | IC, Legal, Comms | Tester RGPD notification |
+| **Vault downtime** | P1 | 30 min | DevOps, Security | Tester fallback secrets |
+| **DB corruption** | P0 | 45 min | DevOps, Security | Tester restauration backup |
+| **Prompt injection** | P1 | 30 min | Dev, Security | Tester sandbox LLM |
+
+#### Processus d'Exercice
+
+```
+1. Annonce du scénario (10 min)
+   ? Le "facilitateur" annonce l'incident simulé
+2. Investigation (15-30 min)
+   ? L'équipe diagnostique et contient (comme en réel)
+3. Résolution (15-20 min)
+   ? L'équipe applique les correctifs
+4. Debrief (15-20 min)
+   ? Revue des actions, identification des améliorations
+5. Rapport (1h après)
+   ? Document actionné intégré au runbook
+```
+
+### 10. Automatisation de la Réponse
+
+#### Alertes Prometheus (Détection Automatique)
+
+```yaml
+# prometheus-rules.yml
+groups:
+  - name: log-sentinel-incidents
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taux d'erreurs > 5% depuis 2 minutes"
+          runbook: "SECURITY_GUIDE.md#section-3"
+
+      - alert: PossibleBruteForce
+        expr: rate(http_requests_total{endpoint="/users"}[1m]) > 20
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tentative brute force sur /users"
+
+      - alert: DBConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Connexions DB > 80%"
+
+      - alert: LLMProviderDown
+        expr: rate(llm_provider_errors[5m]) > 0.5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Provider LLM en erreur"
+```
+
+#### Playbook d'Escalade Automatisée
+
+```yaml
+# Escalation rules (pseudo-code)
+IF alert.severity == "critical":
+    1. Slack #incidents ( immédiat )
+    2. SMS IC ( après 5 min si non ack )
+    3. Email management ( après 15 min )
+    4. PagerDuty ( après 20 min )
+    
+IF alert.severity == "warning":
+    1. Slack #security ( immédiat )
+    2. Email on-call ( après 30 min si non ack )
+```
+
+---
+
 ## Agrégation des Logs
 
 L'API envoie les logs vers Loki pour :
