@@ -27,8 +27,12 @@ from sqlalchemy import (
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool, StaticPool
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request as StarletteRequest
+from middleware import (
+    RequestSizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    CSRFMiddleware,
+    RequestIDMiddleware,
+)
 
 from providers.base import ProviderConfigurationError, ProviderError
 from providers.fake_provider import FakeLLMProvider
@@ -61,33 +65,6 @@ SENSITIVE_PATTERNS = [
     (re.compile(r'\b(?:\d{4}[-\s]?){3}\d{4}\b'), '[CARD_REDACTED]'),
     (re.compile(r'\b[A-Za-z0-9+/=]{40,}\b'), '[TOKEN_REDACTED]'),
 ]
-
-
-class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: StarletteRequest, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                size = int(content_length)
-                if size > MAX_REQUEST_SIZE:
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": f"Request body too large. Maximum size is {MAX_REQUEST_SIZE} bytes."},
-                    )
-            except ValueError:
-                pass
-        return await call_next(request)
-
-
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: StarletteRequest, call_next):
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"
-        return response
 
 
 def _read_secret_from_file(env_var: str, file_env_var: str, default: str = "") -> str:
@@ -214,8 +191,10 @@ app = FastAPI(
     contact={"name": "Music Hall - DevSecOps"},
 )
 
-# Add request size limit middleware
-app.add_middleware(RequestSizeLimitMiddleware)
+app.add_middleware(RequestIDMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware, max_size=MAX_REQUEST_SIZE)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFMiddleware)
 
 
 MAX_LIMIT = 1000
