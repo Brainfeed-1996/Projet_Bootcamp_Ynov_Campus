@@ -17,6 +17,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Index,
     Integer,
     String,
     Text,
@@ -210,9 +211,13 @@ def hash_password(password: str) -> str:
 # --- Modèles SQLAlchemy ---
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_username", "username", unique=True),
+        Index("ix_users_email", "email", unique=True),
+    )
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(50), nullable=False, unique=True)
-    email = Column(String(120), nullable=False, unique=True)
+    username = Column(String(50), nullable=False)
+    email = Column(String(120), nullable=False)
     password_hash = Column(String(256), nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -220,6 +225,11 @@ class User(Base):
 
 class Log(Base):
     __tablename__ = "logs"
+    __table_args__ = (
+        Index("ix_logs_level", "level"),
+        Index("ix_logs_source", "source"),
+        Index("ix_logs_created_at", "created_at"),
+    )
     id = Column(Integer, primary_key=True, autoincrement=True)
     level = Column(String(20), nullable=False)
     message = Column(Text, nullable=False)
