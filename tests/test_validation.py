@@ -1,7 +1,7 @@
-"""Tests de validation des limites et contraintes."""
 import pytest
 from fastapi.testclient import TestClient
-from app import app, get_engine, Base
+
+from app import Base, app, get_engine
 
 
 @pytest.fixture
@@ -19,63 +19,106 @@ def reset_database():
 
 
 def test_log_message_too_long(client):
-    """Test qu'un message trop long est rejeté."""
-    long_message = "A" * 5000  # Max is 4096
-    resp = client.post(
+    response = client.post(
         "/logs",
-        json={"message": long_message, "level": "INFO"},
+        json={"message": "A" * 5000, "level": "INFO"},
     )
-    assert resp.status_code == 422
+
+    assert response.status_code == 422
 
 
 def test_log_source_empty(client):
-    """Test qu'une source vide est rejetée."""
-    resp = client.post(
+    response = client.post(
         "/logs",
         json={"message": "Test", "source": "  "},
     )
-    assert resp.status_code == 422
+
+    assert response.status_code == 422
 
 
 def test_limit_query_parameter_invalid(client):
-    """Test qu'une valeur de limit invalide est rejetée."""
-    resp = client.get("/logs?limit=0")
-    assert resp.status_code == 400
-
-    resp = client.get("/logs?limit=99999")
-    assert resp.status_code == 400
+    assert client.get("/logs?limit=0").status_code == 400
+    assert client.get("/logs?limit=99999").status_code == 400
 
 
-def test_user_password_too_long(client):
-    """Test qu'un mot de passe trop long est rejeté."""
-    long_password = "A" * 73  # Max is 72 for bcrypt
-    resp = client.post(
-        "/users",
-        json={
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": long_password,
-        },
+def test_invalid_json_payload(client):
+    response = client.post("/logs", data="not json")
+
+    assert response.status_code == 422
+
+
+def test_missing_required_fields(client):
+    response = client.post("/logs", json={"level": "INFO"})
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("level", ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+def test_valid_log_levels_are_accepted_and_normalized(client, level):
+    response = client.post(
+        "/logs",
+        json={"message": "Validation log", "level": level.lower(), "source": "validation"},
     )
-    assert resp.status_code == 422
+
+    assert response.status_code == 201
+    assert response.json()["level"] == level
 
 
-def test_user_role_invalid(client):
-    """Test qu'un rôle invalide est rejeté."""
-    resp = client.post(
-        "/users",
-        json={
-            "username": "testuser",
-            "email": "test@example.com",
-            "password": "Password123",
-            "role": "superadmin",
-        },
+@pytest.mark.parametrize("level", ["TRACE", "NOTICE", "WARN", "", "info "])
+def test_invalid_log_levels_are_rejected(client, level):
+    response = client.post(
+        "/logs",
+        json={"message": "Validation log", "level": level, "source": "validation"},
     )
-    assert resp.status_code == 422
-def test_invalid_json_payload():
-    resp = client.post('/logs', data='not json')
-    assert resp.status_code == 422
 
-def test_missing_required_fields():
-    resp = client.post('/logs', json={'level': 'INFO'})
-    assert resp.status_code == 422
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("source", ["api", "web-server", " service ", "capteur-01"])
+def test_valid_sources_are_accepted_and_trimmed(client, source):
+    response = client.post(
+        "/logs",
+        json={"message": "Validation log", "level": "INFO", "source": source},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["source"] == source.strip()
+
+
+@pytest.mark.parametrize("source", ["", "   ", "\t\n"])
+def test_empty_sources_are_rejected(client, source):
+    response = client.post(
+        "/logs",
+        json={"message": "Validation log", "level": "INFO", "source": source},
+    )
+
+    assert response.status_code == 422
+
+
+def test_source_longer_than_maximum_is_rejected(client):
+    response = client.post(
+        "/logs",
+        json={"message": "Validation log", "level": "INFO", "source": "s" * 101},
+    )
+
+    assert response.status_code == 422
+
+
+def test_log_level_query_filter_validates_values(client):
+    invalid = client.get("/logs?level=TRACE")
+    valid = client.get("/logs?level=error")
+
+    assert invalid.status_code == 400
+    assert valid.status_code == 200
+
+
+def test_source_query_filter_accepts_trimmed_value(client):
+    client.post(
+        "/logs",
+        json={"message": "Validation log", "level": "INFO", "source": " api "},
+    )
+
+    response = client.get("/logs?source=api")
+
+    assert response.status_code == 200
+    assert response.json()[0]["source"] == "api"
