@@ -40,6 +40,7 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
 
 
 SWAGGER_UI_SCRIPT_HASH = "sha256-QOOQu4W1oxGqd2nbXbxiA1Di6OHQOLQD+o+G9oWL8YY="
+SWAGGER_OAUTH_SCRIPT_HASH = "sha256-Q8NLdUrRI6i0tSYa9s7b5KZd7Adbpcz558UgROi6Hy8="
 SWAGGER_UI_CDN = "https://cdn.jsdelivr.net"
 
 
@@ -54,7 +55,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/docs" or request.url.path.startswith("/docs/"):
             csp = (
                 "default-src 'self'; "
-                f"script-src 'self' {SWAGGER_UI_CDN} {SWAGGER_UI_SCRIPT_HASH}; "
+                f"script-src 'self' {SWAGGER_UI_CDN} {SWAGGER_UI_SCRIPT_HASH} {SWAGGER_OAUTH_SCRIPT_HASH}; "
                 f"style-src 'self' 'unsafe-inline' {SWAGGER_UI_CDN}; "
                 "img-src 'self' data: https://fastapi.tiangolo.com; "
                 f"font-src 'self' {SWAGGER_UI_CDN}; connect-src 'self'"
