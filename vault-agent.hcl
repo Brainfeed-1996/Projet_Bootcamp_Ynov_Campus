@@ -1,22 +1,22 @@
-# vault-agent.hcl - Configuration Vault Agent
+# vault-agent.hcl - Vault Agent Configuration
 # Place this file at /etc/vault-agent.hcl on the target host
 
 pid_file = "/tmp/vault-agent.pid"
 
-# Template pour les secrets de la base de données
+# Database credentials template
 template {
   source      = "/etc/templates/db-credentials.env.tmpl"
   destination = "/run/secrets/db-credentials.env"
-  command      = "systemctl restart music-hall"
+  command      = "systemctl reload music-hall"
 }
 
-# Template pour la clé secrète
+# Secret key template
 template {
   source      = "/etc/templates/secret-key.env.tmpl"
   destination = "/run/secrets/secret-key.env"
 }
 
-# Configuration du serveur Vault
+# Vault server configuration
 auto_auth {
   method "kubernetes" {
     config = {
@@ -31,5 +31,5 @@ auto_auth {
   }
 }
 
-# Moteur de secrets KV v2
+# KV v2 secrets engine path
 secret_path = "secret/data/music-hall"

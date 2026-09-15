@@ -1,15 +1,15 @@
-# docker-compose.vault.yml - Configuration avec intégration Vault
+# docker-compose.vault.yml - Configuration with Vault integration
 # Usage: docker compose -f compose.yaml -f docker-compose.vault.yml up -d
 #
-# Ce fichier étend la configuration pour utiliser Vault comme source de secrets.
-# Nécessite un service Vault accessible à l'adresse http://vault:8200
-# ou une adresse personnalisée via VAULT_ADDR.
+# This file extends the configuration to use Vault as the secrets source.
+# Requires a Vault instance accessible at http://vault:8200
+# or a custom address via VAULT_ADDR.
 #
-# Limites :
-# - Vault doit être déployé et accessible
-# - Les secrets doivent être initialisés dans Vault (scripts/vault-init.sh)
-# - L'agent Vault (vault-agent) est requis pour récupérer les secrets
-# - Configuration optionnelle - peut être utilisée avec docker-compose.production.yml
+# Prerequisites:
+# - Vault must be deployed and accessible
+# - Secrets must be initialized in Vault (scripts/vault-init.sh)
+# - Vault Agent (vault-agent) is required to retrieve secrets
+# - Can be combined with docker-compose.production.yml
 
 services:
   vault:
@@ -37,11 +37,28 @@ services:
         limits:
           cpus: '0.50'
           memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
     healthcheck:
       test: ["CMD", "vault", "status"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 5s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 50
 
   vault-agent:
     image: hashicorp/vault:1.15.0
@@ -56,7 +73,8 @@ services:
       - vault_data:/vault/data
       - vault_secrets:/run/secrets
       - ./config/vault-agent:/etc/vault-agent:ro
-    command: bash -c 'echo "$$VAULT_TOKEN" > /tmp/vault-token && exec vault agent -config=/etc/vault-agent/agent.hcl'
+    command: |
+      sh -c 'echo "$$VAULT_TOKEN" > /tmp/vault-token && exec vault agent -config=/etc/vault-agent/agent.hcl'
     read_only: true
     tmpfs:
       - /tmp
@@ -72,12 +90,17 @@ services:
         condition: on-failure
         max_attempts: 3
     healthcheck:
-      test: ["CMD", "vault", "status"]
+      test: ["CMD-SHELL", "sh", "-c", "test -f /run/secrets/db_password.txt && test -f /run/secrets/secret_key.txt"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 50
 
   web:
     extends:
@@ -93,6 +116,7 @@ services:
       - secret_key
       - postgres_user
       - postgres_password
+      - openai_api_key
     volumes:
       - vault_secrets:/run/secrets
     environment:
@@ -163,6 +187,8 @@ secrets:
     file: ./secrets/postgres_user.txt
   postgres_password:
     file: ./secrets/postgres_password.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
 
 volumes:
   postgres_data:
@@ -171,10 +197,10 @@ volumes:
   vault_secrets:
 
 # ---
-# Limites :
-# - Vault doit être déployé et accessible
-# - Les secrets doivent être initialisés au préalable
-# - L'agent Vault est requis pour récupérer les secrets
-# - Configuration optionnelle - peut être utilisée avec docker-compose.production.yml
-# - Les secrets sont stockés dans Vault, pas dans les fichiers
+# Vault integration notes:
+# - Vault runs in dev mode (VAULT_DEV=1) for development
+# - In production, use VAULT_DEV=0 with proper TLS and storage backend
+# - Vault Agent retrieves secrets and writes them to /run/secrets
+# - Services read secrets from mounted files (Docker secrets compatible)
+# - Can be combined: docker compose -f compose.yaml -f docker-compose.production.yml -f docker-compose.vault.yml up -d
 # ---

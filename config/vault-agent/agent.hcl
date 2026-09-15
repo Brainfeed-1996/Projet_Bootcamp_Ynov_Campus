@@ -1,5 +1,5 @@
 # Configuration Vault Agent
-# Ce fichier est monté dans le conteneur vault-agent à /etc/vault-agent
+# This file is mounted in the vault-agent container at /etc/vault-agent
 
 pid_file = "/tmp/vault-agent.pid"
 
@@ -34,6 +34,12 @@ template {
   destination = "/run/secrets/postgres_password.txt"
   contents = "{{ with secret \"secret/music-hall\" }}{{ .Data.data.postgres_password }}{{ end }}"
 }
+
+template {
+  destination = "/run/secrets/openai_api_key.txt"
+  contents = "{{ with secret \"secret/music-hall\" }}{{ .Data.data.openai_api_key }}{{ end }}"
+}
+
 retry {
   attempts = 5
   backoff {
