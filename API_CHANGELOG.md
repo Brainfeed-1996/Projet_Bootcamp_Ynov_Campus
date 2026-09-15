@@ -57,6 +57,16 @@ release/*             → Préparation release (version bump, changelog)
 
 ---
 
+### Contrat de compatibilité
+
+- Une version **MINOR** peut ajouter un endpoint, un champ de réponse ou une option de requête, mais ne doit pas modifier le comportement d'un contrat existant.
+- Une version **MAJOR** est obligatoire pour supprimer un endpoint, renommer un champ, changer son type, durcir une règle de validation de manière incompatible ou modifier le schéma d'authentification.
+- Toute modification incompatible doit être accompagnée d'un guide de migration, d'une période de dépréciation et d'un exemple de requête/réponse avant et après.
+- Les endpoints marqués comme expérimentaux ou internes peuvent évoluer sans garantie de stabilité ; ils ne doivent pas être consommés comme contrat public.
+- Les correctifs de sécurité peuvent être publiés en **PATCH** lorsqu'ils préservent le contrat ; un changement de sécurité incompatible relève d'une version **MAJOR**.
+
+---
+
 ## Changelog
 
 ### [Unreleased] — Develop Branch
