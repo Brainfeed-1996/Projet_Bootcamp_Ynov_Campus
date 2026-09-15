@@ -57,5 +57,38 @@ def test_detailed_health(client):
     assert 'checks' in resp.json()
 
 
+def test_webhook_log_created(client):
+    """Webhook de création de log avec validation."""
+    resp = client.post('/webhooks/log-created', json={
+        'event': 'log-created',
+        'log_id': 1,
+        'level': 'ERROR',
+        'message': 'Test webhook message',
+        'source': 'api',
+    })
+    assert resp.status_code == 202
+    assert resp.json()['status'] == 'received'
+
+
+def test_webhook_invalid_level(client):
+    """Webhook avec un niveau invalide."""
+    resp = client.post('/webhooks/log-created', json={
+        'event': 'log-created',
+        'log_id': 1,
+        'level': 'INVALID',
+        'message': 'Test',
+        'source': 'api',
+    })
+    assert resp.status_code == 422
+
+
+def test_webhook_missing_fields(client):
+    """Webhook avec des champs manquants."""
+    resp = client.post('/webhooks/log-created', json={
+        'event': 'log-created',
+        'log_id': 1,
+    })
+    assert resp.status_code == 422
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

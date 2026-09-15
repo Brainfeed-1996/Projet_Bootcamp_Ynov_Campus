@@ -56,6 +56,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 MAX_REQUEST_SIZE = 10 * 1024 * 1024
 MAX_BULK_ITEMS = 10000
+DEFAULT_REPORT_PAGE_SIZE = 1000
+MAX_REPORT_PAGE_SIZE = 5000
 USER_CACHE_SIZE = int(os.getenv("USER_CACHE_SIZE", "256"))
 CONFIG_CACHE_SIZE = int(os.getenv("CONFIG_CACHE_SIZE", "64"))
 
@@ -420,6 +422,60 @@ def stream_logs_as_csv(db: Session):
         output.truncate(0)
 
 
+def iter_log_report_rows(
+    db: Session,
+    page: int,
+    page_size: int,
+    level: str | None = None,
+    source: str | None = None,
+):
+    stmt = select(Log)
+    if level:
+        stmt = stmt.where(Log.level == level)
+    if source:
+        stmt = stmt.where(Log.source == source)
+    stmt = (
+        stmt.order_by(Log.created_at, Log.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .execution_options(stream_results=True)
+    )
+    result = db.execute(stmt)
+    try:
+        yield from result.scalars()
+    finally:
+        result.close()
+
+
+def stream_log_report_as_csv(
+    db: Session,
+    page: int = 1,
+    page_size: int = DEFAULT_REPORT_PAGE_SIZE,
+    level: str | None = None,
+    source: str | None = None,
+):
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "level", "message", "source", "created_at"])
+    yield output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    for log in iter_log_report_rows(db, page, page_size, level, source):
+        writer.writerow(
+            [
+                log.id,
+                log.level,
+                log.message,
+                log.source or "",
+                log.created_at.isoformat() if log.created_at else "",
+            ]
+        )
+        output.seek(0)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
 # --- Routes utilisateurs ---
 @app.get("/users/{user_id}", response_model=UserRead, tags=["Users"])
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -516,6 +572,39 @@ def export_logs(db: Session = Depends(get_db)):
         stream_logs_as_csv(db),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=logs.csv"},
+    )
+
+
+@app.get("/logs/report", tags=["Logs"])
+def export_log_report(
+    page: int = 1,
+    page_size: int = DEFAULT_REPORT_PAGE_SIZE,
+    level: str | None = None,
+    source: str | None = None,
+    db: Session = Depends(get_db),
+):
+    if page < 1:
+        return create_error_response(400, "page doit être supérieur ou égal à 1.")
+    if page_size < 1 or page_size > MAX_REPORT_PAGE_SIZE:
+        return create_error_response(
+            400,
+            f"page_size doit être entre 1 et {MAX_REPORT_PAGE_SIZE}.",
+        )
+    try:
+        if level:
+            level = check_level(level)
+        if source:
+            source = check_source(source)
+    except ValueError as exc:
+        return create_error_response(400, str(exc))
+    return StreamingResponse(
+        stream_log_report_as_csv(db, page, page_size, level, source),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="logs-report-page-{page}.csv"',
+            "X-Page": str(page),
+            "X-Page-Size": str(page_size),
+        },
     )
 
 
