@@ -22,7 +22,25 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                     )
             except ValueError:
                 pass
+
+        body = b""
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > self.max_size:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Maximum size is {self.max_size} bytes."},
+                )
+
+        async def receive():
+            return {"type": "http.request", "body": body, "more_body": False}
+
+        request._receive = receive
         return await call_next(request)
+
+
+SWAGGER_UI_SCRIPT_HASH = "sha256-QOOQu4W1oxGqd2nbXbxiA1Di6OHQOLQD+o+G9oWL8YY="
+SWAGGER_UI_CDN = "https://cdn.jsdelivr.net"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -32,7 +50,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"
+
+        if request.url.path == "/docs" or request.url.path.startswith("/docs/"):
+            csp = (
+                "default-src 'self'; "
+                f"script-src 'self' {SWAGGER_UI_CDN} {SWAGGER_UI_SCRIPT_HASH}; "
+                f"style-src 'self' 'unsafe-inline' {SWAGGER_UI_CDN}; "
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                f"font-src 'self' {SWAGGER_UI_CDN}; connect-src 'self'"
+            )
+        else:
+            csp = (
+                "default-src 'self'; script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                "font-src 'self'; connect-src 'self'"
+            )
+
+        response.headers["Content-Security-Policy"] = csp
         return response
 
 
