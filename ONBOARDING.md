@@ -458,7 +458,141 @@ make clean       # ou docker compose down -v && rm -rf secrets/
 
 ---
 
-## 11. Contacts et Support
+## 13. Architecture du Codebase
+
+### Flux de Données Principal
+
+```
+Client Request
+     │
+     ▼
+┌─────────────────┐
+│  app.py (routes) │  ← FastAPI routers, validation Pydantic
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌──────────────────┐
+│ Middleware        │────▶│ Rate Limiter     │
+│ (auth, CORS,     │     │ Request Size     │
+│  redaction,      │     │ Limit            │
+│  maintenance)    │     └──────────────────┘
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐     ┌──────────────────┐
+│ Providers        │────▶│ LLM Provider     │
+│ (LLM / DB)       │     │ fake|openai|ollama│
+└────────┬────────┘     └──────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│ SQLAlchemy ORM   │  ← Session management, connection pool
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ PostgreSQL / SQLite│
+└─────────────────┘
+```
+
+### Fichiers Clés à Connaître
+
+| Fichier | Rôle | Taille | Fréquence de lecture |
+|---------|------|--------|---------------------|
+| `app.py` | Application FastAPI, routes, config | ~500 L | Quotidienne |
+| `providers/base.py` | Interface abstraite LLM | ~50 L | Hebdomadaire |
+| `providers/fake_provider.py` | Provider de test | ~80 L | Hebdomadaire |
+| `providers/openai_provider.py` | Provider OpenAI | ~100 L | Mensuelle |
+| `schemas/*.py` | Modèles Pydantic | ~50 L | Quotidienne |
+| `tests/conftest.py` | Fixtures pytest | ~80 L | Hebdomadaire |
+| `compose.yaml` | Docker Compose dev | ~150 L | Hebdomadaire |
+| `docker-compose.production.yml` | Prod overrides | ~300 L | Mensuelle |
+| `Dockerfile` | Image de conteneur | ~40 L | Mensuelle |
+
+### Standards de Code
+
+#### Formatage
+```bash
+# Formatage automatique
+black app.py tests/
+isort app.py tests/
+
+# Vérification (CI)
+ruff check . --fix
+ruff format --check .
+```
+
+#### Naming Conventions
+
+| Élément | Convention | Exemple |
+|---------|------------|---------|
+| Variables | snake_case | `user_id`, `log_level` |
+| Classes | PascalCase | `UserCreate`, `LogRead` |
+| Constants | UPPER_SNAKE_CASE | `MAX_UPLOAD_SIZE`, `DEFAULT_RATE_LIMIT` |
+| Endpoints | kebab-case (URL) | `/logs/bulk`, `/export/analyses` |
+| Fonctions | verb_noun | `get_logs()`, `create_user()` |
+| Fichiers | snake_case | `fake_provider.py`, `test_security.py` |
+
+#### Principes SOLID dans le projet
+
+| Principe | Application | Exemple |
+|----------|------------|---------|
+| **S**ingle Responsibility | Chaque provider fait une seule chose | `fake_provider` = uniquement fake |
+| **O**pen/Closed | Providers extensibles via interface | `BaseLLMProvider` + nouveau provider |
+| **L**iskov Substitution | Tous les providers interchangeables | `get_llm_provider()` retourne n'importe lequel |
+| **I**nterface Segregation | Interfaces minimales | `LLMProvider` : `analyze()` uniquement |
+| **D**ependency Inversion | App dépend de l'abstraction | `providers/` injectés, pas concrets |
+
+---
+
+## 14. Pattern d'Ajout d'un Endpoint
+
+### Étapes
+
+```
+1. Définir le modèle Pydantic dans schemas/
+2. Ajouter la route dans app.py
+3. Ajouter les tests dans tests/
+4. Mettre à jour QUICKREF.md
+5. Mettre à jour la README.md (Endoints)
+6. PR avec description complète
+```
+
+### Template Minimum
+
+```python
+# 1. schemas/nouveau_modele.py
+from pydantic import BaseModel, Field
+
+class MonModeleCreate(BaseModel):
+    champ_requis: str = Field(..., min_length=1, max_length=255)
+    champ_optionnel: str = Field(default="valeur")
+
+class MonModeleRead(BaseModel):
+    id: int
+    champ_requis: str
+    champ_optionnel: str
+
+# 2. app.py (route)
+from schemas.nouveau_modele import MonModeleCreate, MonModeleRead
+
+@app.post("/nouveaux", response_model=MonModeleRead)
+async def create_nouveau(data: MonModeleCreate):
+    # Logique métier
+    return MonModeleRead(id=1, **data.model_dump())
+
+# 3. tests/test_nouveaux.py
+def test_create_nouveau(client):
+    response = client.post("/nouveaux", json={
+        "champ_requis": "test"
+    })
+    assert response.status_code == 201
+    assert response.json()["champ_requis"] == "test"
+```
+
+---
+
+## 15. Contacts et Support
 
 - **Tech Lead** : @olivier-robert-duboille (GitHub)
 - **Canal Slack/Discord** : #log-sentinel-dev
@@ -467,7 +601,7 @@ make clean       # ou docker compose down -v && rm -rf secrets/
 
 ---
 
-## 12. Checklist de Validation Onboarding
+## 16. Checklist de Validation Onboarding
 
 - [ ] Environnement local fonctionnel (Docker + Python)
 - [ ] `docker compose up` → `/health` OK
@@ -481,6 +615,8 @@ make clean       # ou docker compose down -v && rm -rf secrets/
 - [ ] A lu `SECURITY_GUIDE.md` (threat model, headers)
 - [ ] Sait où trouver les secrets (Vault/Docker Secrets)
 - [ ] Comprend le fallback LLM (fake provider)
+- [ ] Connaît les standards de code (ruff, black, mypy)
+- [ ] Peut ajouter un endpoint complet (model → route → test)
 
 ---
 
