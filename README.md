@@ -863,23 +863,289 @@ L'API utilise un rate limiting pour protéger contre les abus :
 
 ## Schéma de Base de Données
 
-### Table users
-- id: Identifiant unique
-- username: Nom d'utilisateur (unique)
-- email: Adresse email (unique)
-- password_hash: Mot de passe haché
-- role: Rôle (admin/writer/reader)
-- is_active: Compte actif
-- created_at: Date de création
+Le projet utilise **PostgreSQL 15+** en production et **SQLite en mémoire** pour les tests (`TESTING=1`). Les tables sont créées automatiquement au démarrage via `SQLAlchemy Base.metadata.create_all()`.
 
-### Table logs
-- id: Identifiant unique
-- occurred_at: Horodatage de l'événement
-- level: Niveau (DEBUG/INFO/WARNING/ERROR/CRITICAL)
-- message: Contenu du log
-- source: Source du log
-- log_metadata: Métadonnées JSON
-- created_at: Date d'ingestion
+### Diagramme Entité-Relation
+
+```
+???????????????????       ???????????????????       ???????????????????
+?     users       ?       ?     logs        ?       ?   analyses      ?
+???????????????????       ???????????????????       ???????????????????
+? PK  id          ?       ? PK  id          ?       ? PK  id          ?
+?     username    ????????? FK  user_id?    ?       ? FK  log_id      ?
+?     email       ?       ?     level       ??????????     type        ?
+?     password_hash?      ?     message     ?       ?     input_data  ?
+?     role        ?       ?     source      ?       ?     result      ?
+?     is_active   ?       ?     log_metadata?       ?     created_at  ?
+?     created_at  ?       ?     created_at  ?       ???????????????????
+???????????????????       ???????????????????
+         ?                        ?
+         ?                        ? (1 log ? N analyses)
+         ?                        ?
+   Soft delete             Analyse LLM
+   (is_active=false)       ou manuelle
+```
+
+> **Note** : La relation `users ? logs` via `user_id` est prévue dans le modèle mais pas encore implémentée dans l'API actuelle (logs non attachés à un user). Voir roadmap v1.2.
+
+---
+
+### Table `users`
+
+Stocke les comptes utilisateurs pour l'authentification et l'autorisation.
+
+| Colonne | Type | Contraintes | Description |
+|---------|------|-------------|-------------|
+| `id` | `INTEGER` | `PRIMARY KEY`, `AUTOINCREMENT` | Identifiant unique |
+| `username` | `VARCHAR(50)` | `NOT NULL`, `UNIQUE` | Nom d'utilisateur (3-50 chars) |
+| `email` | `VARCHAR(120)` | `NOT NULL`, `UNIQUE` | Email valide (max 120 chars) |
+| `password_hash` | `VARCHAR(256)` | `NOT NULL` | Hash bcrypt (cost 12) |
+| `role` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'reader'` | Rôle : `admin`, `writer`, `reader` |
+| `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Soft delete flag |
+| `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date de création UTC |
+
+**Index :**
+```sql
+-- Créés automatiquement par UNIQUE constraints
+CREATE UNIQUE INDEX ix_users_username ON users(username);
+CREATE UNIQUE INDEX ix_users_email ON users(email);
+
+-- Recommandé pour requêtes fréquentes
+CREATE INDEX ix_users_is_active ON users(is_active);
+CREATE INDEX ix_users_created_at ON users(created_at DESC);
+```
+
+**Exemple d'insertion :**
+```sql
+INSERT INTO users (username, email, password_hash, role)
+VALUES (
+  'alice',
+  'alice@example.com',
+  '$2b$12$...',  -- bcrypt hash
+  'writer'
+);
+```
+
+---
+
+### Table `logs`
+
+Stocke les événements de logs ingérés (JSON, CSV, bulk).
+
+| Colonne | Type | Contraintes | Description |
+|---------|------|-------------|-------------|
+| `id` | `INTEGER` | `PRIMARY KEY`, `AUTOINCREMENT` | Identifiant unique |
+| `level` | `VARCHAR(20)` | `NOT NULL` | Niveau : `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `message` | `TEXT` | `NOT NULL` | Contenu du log (max 4096 chars) |
+| `source` | `VARCHAR(100)` | `DEFAULT 'unknown'` | Source/origine du log |
+| `log_metadata` | `JSONB` | `NULLABLE` | Métadonnées additionnelles (extensible) |
+| `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date d'ingestion UTC |
+
+**Index :**
+```sql
+-- Index pour filtres fréquents (GET /logs?level=...&source=...)
+CREATE INDEX ix_logs_level ON logs(level);
+CREATE INDEX ix_logs_source ON logs(source);
+CREATE INDEX ix_logs_created_at ON logs(created_at DESC);
+
+-- Index composite pour filtres combinés
+CREATE INDEX ix_logs_level_created_at ON logs(level, created_at DESC);
+CREATE INDEX ix_logs_source_created_at ON logs(source, created_at DESC);
+
+-- Index GIN pour recherche JSONB (si log_metadata utilisé)
+CREATE INDEX ix_logs_metadata_gin ON logs USING GIN (log_metadata);
+```
+
+**Contraintes de validation (appliquées par Pydantic avant INSERT) :**
+- `level` ? `{DEBUG, INFO, WARNING, ERROR, CRITICAL}`
+- `message` : 1-4096 caractères, non vide
+- `source` : 1-100 caractères, non vide
+
+**Exemple d'insertion :**
+```sql
+INSERT INTO logs (level, message, source, log_metadata)
+VALUES (
+  'ERROR',
+  'Database connection pool exhausted',
+  'postgres',
+  '{"pool_size": 20, "active": 20, "waiting": 5}'::jsonb
+);
+```
+
+---
+
+### Table `analyses`
+
+Stocke les résultats d'analyse des logs (via LLM ou manuelles).
+
+| Colonne | Type | Contraintes | Description |
+|---------|------|-------------|-------------|
+| `id` | `INTEGER` | `PRIMARY KEY`, `AUTOINCREMENT` | Identifiant unique |
+| `log_id` | `INTEGER` | `NOT NULL`, `REFERENCES logs(id)` | FK vers table logs |
+| `type` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'log_analysis'` | Type d'analyse |
+| `input_data` | `TEXT` | `NULLABLE` | Log message analysé (copie) |
+| `result` | `TEXT` | `NULLABLE` | Résultat JSON (AnalysisResult schema) |
+| `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date d'analyse UTC |
+
+**Index :**
+```sql
+-- FK index (requis pour JOIN performances)
+CREATE INDEX ix_analyses_log_id ON analyses(log_id);
+
+-- Tri par date (GET /analyses ORDER BY created_at DESC)
+CREATE INDEX ix_analyses_created_at ON analyses(created_at DESC);
+
+-- Index composite pour requêtes "analyses récentes d'un log"
+CREATE INDEX ix_analyses_log_id_created_at ON analyses(log_id, created_at DESC);
+```
+
+**Schéma `result` (JSON stocké dans `TEXT`) :**
+```json
+{
+  "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+  "category": "AUTH|NETWORK|SYSTEM|APPLICATION|DATABASE|SECURITY",
+  "summary": "Brève description de l'incident",
+  "recommendations": [
+    "Action corrective 1",
+    "Action corrective 2"
+  ],
+  "provider": "fake|openai|ollama"
+}
+```
+
+**Exemple d'insertion :**
+```sql
+INSERT INTO analyses (log_id, type, input_data, result)
+VALUES (
+  42,
+  'log_analysis',
+  'Database connection pool exhausted',
+  '{"severity":"HIGH","category":"DATABASE","summary":"Pool épuisé","recommendations":["Augmenter pool_size","Optimiser requêtes"],"provider":"fake"}'
+);
+```
+
+---
+
+### Relations et Intégrité Référentielle
+
+```sql
+-- Relation analyses ? logs (1 log = N analyses)
+ALTER TABLE analyses
+ADD CONSTRAINT fk_analyses_log_id
+FOREIGN KEY (log_id) REFERENCES logs(id)
+ON DELETE CASCADE;  -- Si log supprimé, analyses associées supprimées
+```
+
+> **Note** : `ON DELETE CASCADE` assure la cohérence. La suppression d'un log (soft ou hard) entraîne la suppression de ses analyses.
+
+---
+
+### Migrations et Évolutions
+
+Le projet n'utilise pas encore d'outil de migration formel (Alembic). Les changements de schéma sont gérés par :
+
+1. **Modification des modèles SQLAlchemy** dans `app.py`
+2. **Redémarrage de l'app** ? `Base.metadata.create_all()` crée tables manquantes
+3. **Migrations manuelles** pour changements destructifs (ALTER TABLE, DROP COLUMN)
+
+#### Roadmap Migrations (v1.2+)
+- [ ] Ajouter `user_id` FK sur `logs` (authorship)
+- [ ] Ajouter `alerts` table pour seuils de sévérité
+- [ ] Partitionner `logs` par mois (pg_partman)
+- [ ] Ajouter `full-text search` via `tsvector` + GIN index
+
+---
+
+### Requêtes Utiles pour Administration
+
+```sql
+-- Statistiques globales
+SELECT
+  (SELECT count(*) FROM users WHERE is_active) as active_users,
+  (SELECT count(*) FROM logs) as total_logs,
+  (SELECT count(*) FROM analyses) as total_analyses,
+  (SELECT count(*) FROM analyses WHERE result::jsonb->>'severity' IN ('HIGH','CRITICAL')) as critical_alerts;
+
+-- Logs par niveau (dernières 24h)
+SELECT level, count(*)
+FROM logs
+WHERE created_at > now() - interval '24 hours'
+GROUP BY level
+ORDER BY count(*) DESC;
+
+-- Top 10 sources de logs
+SELECT source, count(*) as cnt
+FROM logs
+GROUP BY source
+ORDER BY cnt DESC
+LIMIT 10;
+
+-- Analyses par provider
+SELECT result::jsonb->>'provider' as provider, count(*)
+FROM analyses
+GROUP BY provider;
+
+-- Logs sans analyse (candidats pour analyse)
+SELECT l.id, l.level, l.message, l.created_at
+FROM logs l
+LEFT JOIN analyses a ON a.log_id = l.id
+WHERE a.id IS NULL
+ORDER BY l.created_at DESC
+LIMIT 50;
+
+-- Taille tables et index
+SELECT
+  schemaname,
+  tablename,
+  pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as total_size,
+  pg_size_pretty(pg_relation_size(schemaname||'.'||tablename)) as table_size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+```
+
+---
+
+### Sauvegarde et Restauration
+
+```bash
+# Backup complet (structure + données)
+docker compose exec db pg_dump -U log_sentinel -d log_sentinel > backup_full_$(date +%F).sql
+
+# Backup données seulement (pour restauration sur schéma existant)
+docker compose exec db pg_dump -U log_sentinel -d log_sentinel --data-only > backup_data_$(date +%F).sql
+
+# Backup table spécifique
+docker compose exec db pg_dump -U log_sentinel -d log_sentinel -t logs > backup_logs_$(date +%F).sql
+
+# Restauration
+docker compose exec -T db psql -U log_sentinel -d log_sentinel < backup_full_2025-09-15.sql
+
+# Restauration table unique (attention: TRUNCATE d'abord)
+docker compose exec db psql -U log_sentinel -d log_sentinel -c "TRUNCATE logs, analyses RESTART IDENTITY CASCADE;"
+docker compose exec -T db psql -U log_sentinel -d log_sentinel < backup_logs_2025-09-15.sql
+```
+
+---
+
+### Configuration PostgreSQL Recommandée (Production)
+
+```postgresql
+# postgresql.conf (via Docker config ou volume)
+shared_buffers = 256MB                    # 25% RAM
+effective_cache_size = 1GB                # 75% RAM
+work_mem = 16MB                           # Par opération tri/hash
+maintenance_work_mem = 256MB              # VACUUM, CREATE INDEX
+max_connections = 100                     # Selon pool taille
+random_page_cost = 1.1                    # SSD
+effective_io_concurrency = 200            # SSD NVMe
+wal_buffers = 16MB
+checkpoint_completion_target = 0.9
+max_wal_size = 4GB
+min_wal_size = 1GB
+```
+
+---
 
 ## Contribuer
 
