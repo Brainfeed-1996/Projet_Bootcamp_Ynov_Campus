@@ -30,12 +30,12 @@ API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un co
 Le projet suit une architecture en 3 couches :
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+┌─────────────────┝     ┌──────────────────┝     ┌─────────────────┝
 │   Client HTTP   │────▶│   FastAPI App    │────▶│  PostgreSQL DB  │
 │   (curl/docs)   │     │   (app.py)       │     │  (users/logs)   │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
                                 │
-                        ┌───────┴────────┐
+                        ┌───────┴────────┝
                         │  LLM Providers │
                         │  (OpenAI/Ollama│
                         │   /Fake)       │
@@ -183,6 +183,209 @@ curl -X POST http://localhost:5000/logs/ingest-csv -F "file=@data/sample_logs.cs
 # Analyse (fake provider)
 curl -X POST http://localhost:5000/logs/1/analyze
 curl http://localhost:5000/analyses
+```
+
+---
+
+## R�f�rence API Compl�te
+
+L'API est document�e via OpenAPI/Swagger � `/docs` (interface interactive) et `/openapi.json` (sch�ma brut).
+
+### Authentification
+
+Toutes les routes (sauf `/health` et `/docs`) n�cessitent un token JWT dans l'en-t�te `Authorization: Bearer <token>`. Obtenir un token via `POST /auth/login` (non impl�ment� dans cette version, voir `GET /users/{id}` pour lecture seule).
+
+### Rate Limiting
+
+| Endpoint | Limite |
+|----------|--------|
+| Authentification | 10 req/min |
+| Cr�ation de logs | 50 req/min |
+| Analyse IA | 30 req/min |
+| Lecture (GET) | 100 req/min |
+
+Headers de r�ponse : `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+### Utilisateurs (`/users`)
+
+| M�thode | Endpoint | Description | Corps de requ�te | R�ponse succ�s |
+|---------|----------|-------------|------------------|----------------|
+| `GET` | `/users/{user_id}` | R�cup�rer un utilisateur par ID | � | `200 UserRead` |
+| `POST` | `/users` | Cr�er un utilisateur | `UserCreate` | `201 UserRead` |
+| `DELETE` | `/users/{user_id}` | D�sactiver un utilisateur (soft delete) | � | `200 {id, status}` |
+
+**UserCreate** :
+```json
+{
+  "username": "string (3-50 chars, unique)",
+  "email": "string (email valide, unique, max 120)",
+  "password": "string (min 8 chars)"
+}
+```
+
+**UserRead** :
+```json
+{
+  "id": "integer",
+  "username": "string",
+  "email": "string",
+  "is_active": "boolean"
+}
+```
+
+**Erreurs** :
+- `400` : ID invalide (? 0)
+- `404` : Utilisateur introuvable ou inactif
+- `409` : Username ou email d�j� existant
+- `422` : Validation �chou�e (champs manquants, format invalide)
+
+### Logs (`/logs`)
+
+| M�thode | Endpoint | Description | Param�tres / Corps | R�ponse succ�s |
+|---------|----------|-------------|-------------------|----------------|
+| `GET` | `/logs` | Lister les logs avec filtres | `level?`, `source?`, `limit? (1-1000, d�faut 100)` | `200 [LogRead]` |
+| `POST` | `/logs` | Cr�er un log | `LogCreate` | `201 LogRead` |
+| `GET` | `/logs/{log_id}` | R�cup�rer un log par ID | � | `200 LogRead` |
+| `POST` | `/logs/bulk` | Ingestion bulk JSON | `[LogCreate, ...]` (max 10000) | `200 BulkResult` |
+| `POST` | `/logs/ingest-csv` | Ingestion CSV (multipart) | Fichier `.csv` avec colonnes `message`, `level?`, `source?` | `200 BulkResult` |
+| `POST` | `/logs/{log_id}/analyze` | Analyser un log via LLM | � | `201 {id, log_id, result}` |
+
+**LogCreate** :
+```json
+{
+  "message": "string (1-4096 chars, requis)",
+  "level": "string (DEBUG/INFO/WARNING/ERROR/CRITICAL, d�faut INFO)",
+  "source": "string (1-100 chars, d�faut 'unknown')"
+}
+```
+
+**LogRead** :
+```json
+{
+  "id": "integer",
+  "level": "string",
+  "message": "string",
+  "source": "string | null",
+  "created_at": "ISO8601 datetime | null"
+}
+```
+
+**BulkResult** :
+```json
+{
+  "ingested": "integer",
+  "rejected": "integer",
+  "errors": ["string", ...]
+}
+```
+
+**Analyse Result** :
+```json
+{
+  "id": "integer",
+  "log_id": "integer",
+  "result": {
+    "severity": "LOW|MEDIUM|HIGH|CRITICAL",
+    "category": "string (ex: AUTH, NETWORK, SYSTEM)",
+    "summary": "string",
+    "recommendations": ["string", ...],
+    "provider": "fake|openai|ollama"
+  }
+}
+```
+
+**Erreurs** :
+- `400` : ID invalide, limit hors bornes, level invalide, source vide
+- `404` : Log introuvable
+- `413` : Corps trop volumineux (> 10 MB) ou fichier CSV trop gros
+- `422` : Validation �chou�e, CSV invalide (colonne `message` requise)
+- `502` : Provider LLM indisponible
+- `503` : Base de donn�es indisponible
+
+### Analyses (`/analyses`)
+
+| M�thode | Endpoint | Description | Corps de requ�te | R�ponse succ�s |
+|---------|----------|-------------|------------------|----------------|
+| `GET` | `/analyses` | Lister les analyses | `limit? (1-1000, d�faut 50)` | `200 [AnalyseRead]` |
+| `POST` | `/analyses` | Cr�er une analyse manuelle | `{type, input_data?, result?}` | `201 AnalyseRead` |
+
+**AnalyseRead** :
+```json
+{
+  "id": "integer",
+  "type": "string",
+  "input_data": "string | null",
+  "result": "string | null",
+  "created_at": "ISO8601 datetime | null"
+}
+```
+
+### Sant� et Monitoring (`/health`, `/metrics`)
+
+| M�thode | Endpoint | Description | R�ponse succ�s |
+|---------|----------|-------------|----------------|
+| `GET` | `/health` | V�rifier sant� API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
+| `GET` | `/metrics` | M�triques Prometheus (si configur�) | Format Prometheus text |
+
+### Codes d'erreur globaux
+
+| Code | Signification |
+|------|---------------|
+| `200` | Succ�s (GET, PUT, DELETE) |
+| `201` | Cr�� (POST) |
+| `400` | Requ�te invalide (param�tres, validation m�tier) |
+| `401` | Non authentifi� (token manquant/invalide) |
+| `403` | Interdit (CSRF, permissions insuffisantes) |
+| `404` | Ressource introuvable |
+| `409` | Conflit (doublon unique) |
+| `413` | Payload trop volumineux |
+| `422` | Erreur de validation Pydantic |
+| `500` | Erreur interne serveur |
+| `502` | Provider LLM indisponible |
+| `503` | Service indisponible (DB down) |
+
+### Exemples complets
+
+**Cr�er un utilisateur** :
+```bash
+curl -X POST http://localhost:5000/users \
+  -H "Content-Type: application/json" \
+  -d '{"username":"bob","email":"bob@example.com","password":"SecurePass123"}'
+```
+
+**Cr�er un log** :
+```bash
+curl -X POST http://localhost:5000/logs \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Database connection pool exhausted","level":"CRITICAL","source":"postgres"}'
+```
+
+**Filtrer les logs** :
+```bash
+curl "http://localhost:5000/logs?level=ERROR&source=api&limit=20"
+```
+
+**Ingestion bulk** :
+```bash
+curl -X POST http://localhost:5000/logs/bulk \
+  -H "Content-Type: application/json" \
+  -d '[{"message":"Error 1","level":"ERROR"},{"message":"Warning 1","level":"WARNING"}]'
+```
+
+**Ingestion CSV** :
+```bash
+curl -X POST http://localhost:5000/logs/ingest-csv \
+  -F "file=@logs.csv"
+```
+
+**Analyser un log** :
+```bash
+curl -X POST http://localhost:5000/logs/1/analyze
+```
+
+**Lister les analyses** :
+```bash
+curl "http://localhost:5000/analyses?limit=10"
 ```
 
 ---
