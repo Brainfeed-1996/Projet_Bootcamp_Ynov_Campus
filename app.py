@@ -313,6 +313,7 @@ class Log(Base):
         Index("ix_logs_created_at", "created_at"),
         Index("ix_logs_level_created_at", "level", "created_at"),
         Index("ix_logs_source_created_at", "source", "created_at"),
+        Index("ix_logs_level_source_created_at", "level", "source", "created_at"),
     )
     id = Column(Integer, primary_key=True, autoincrement=True)
     level = Column(String(20), nullable=False)
