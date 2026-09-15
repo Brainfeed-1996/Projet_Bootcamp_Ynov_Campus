@@ -6,6 +6,7 @@ import os
 import re
 import time
 from datetime import datetime
+from functools import lru_cache
 from io import StringIO
 
 import bcrypt
@@ -55,6 +56,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 MAX_REQUEST_SIZE = 10 * 1024 * 1024
 MAX_BULK_ITEMS = 10000
+USER_CACHE_SIZE = int(os.getenv("USER_CACHE_SIZE", "256"))
+CONFIG_CACHE_SIZE = int(os.getenv("CONFIG_CACHE_SIZE", "64"))
 
 RATE_LIMIT_DEFAULT = "100/minute"
 RATE_LIMIT_AUTH = "10/minute"
@@ -181,6 +184,28 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+@lru_cache(maxsize=USER_CACHE_SIZE)
+def get_user_by_username(username: str) -> tuple[int, str, str, bool] | None:
+    with SessionLocal() as db:
+        user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
+        if user is None:
+            return None
+        return user.id, user.username, user.email, bool(user.is_active)
+
+
+def clear_user_cache():
+    get_user_by_username.cache_clear()
+
+
+@lru_cache(maxsize=CONFIG_CACHE_SIZE)
+def get_configuration(key: str, default: str = "") -> str:
+    return os.environ.get(key, default)
+
+
+def clear_configuration_cache():
+    get_configuration.cache_clear()
 
 
 app = FastAPI(
@@ -334,7 +359,7 @@ def get_llm_provider():
     if _provider is not None:
         return _provider
 
-    requested = os.environ.get("LLM_PROVIDER", "").lower()
+    requested = get_configuration("LLM_PROVIDER", "").lower()
     ordered = _get_ordered_providers(requested)
 
     last_error = None
@@ -408,17 +433,19 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
 
 @app.post("/users", response_model=UserRead, status_code=201, tags=["Users"])
 def create_user(payload: UserCreate, db: Session = Depends(get_db)):
-    existing = db.execute(
-        text("SELECT id FROM users WHERE username = :u OR email = :e"),
-        {"u": payload.username, "e": payload.email},
-    ).fetchone()
-    if existing:
+    if get_user_by_username(payload.username):
+        return create_error_response(409, "Utilisateur ou email déjà existant.")
+    existing_email = db.execute(
+        select(User.id).where(User.email == payload.email)
+    ).first()
+    if existing_email:
         return create_error_response(409, "Utilisateur ou email déjà existant.")
     user = User(username=payload.username, email=payload.email)
     user.password_hash = hash_password(payload.password)
     db.add(user)
     db.commit()
     db.refresh(user)
+    clear_user_cache()
     return user
 
 
@@ -431,6 +458,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
         return create_error_response(404, "Utilisateur introuvable.")
     user.is_active = False
     db.commit()
+    clear_user_cache()
     return {"id": user_id, "status": "deleted"}
 
 
