@@ -5,24 +5,18 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timedelta, timezone
-from io import StringIO
-from typing import Any, Optional
+from datetime import datetime
 
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, Form, status
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse, Response, StreamingResponse
-from jose import jwt, JWTError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    ForeignKey,
     Integer,
     String,
     Text,
@@ -32,7 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from sqlalchemy.pool import QueuePool, StaticPool
+from sqlalchemy.pool import StaticPool, QueuePool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -130,18 +124,14 @@ DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
 
 
-def _create_production_engine():
-    return create_engine(
+def wait_for_db(max_retries=30, delay=2):
+    engine = create_engine(
         DATABASE_URL,
         poolclass=QueuePool,
         pool_size=DB_POOL_SIZE,
         max_overflow=DB_MAX_OVERFLOW,
         pool_pre_ping=True,
     )
-
-
-def wait_for_db(max_retries=30, delay=2):
-    engine = _create_production_engine()
     for attempt in range(1, max_retries + 1):
         try:
             with engine.connect() as conn:
@@ -224,8 +214,8 @@ MIN_LIMIT = 1
 
 
 # --- Helpers ---
-def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode(), password_hash.encode())
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
 
 
 # --- Modèles SQLAlchemy ---
@@ -662,323 +652,3 @@ async def internal_server_error_handler(request: Request, exc: Exception):
     )
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
-
-# Validation helper functions
-def validate_log_level(level: str) -> bool:
-    return level.upper() in VALID_LEVELS
-
-def validate_severity(severity: str) -> bool:
-    return severity.upper() in VALID_SEVERITIES
-
-# Enhanced error handling for bulk operations
-def handle_bulk_error(error: Exception, line_number: int) -> str:
-    return f'Line {line_number}: {str(error)}'
-
-# Optimized query with indexes
-def get_logs_optimized(db, level=None, source=None, limit=100):
-    query = select(Log).order_by(Log.created_at.desc()).limit(limit)
-    if level:
-        query = query.where(Log.level == level)
-    if source:
-        query = query.where(Log.source == source)
-    return db.execute(query).scalars().all()
-
-import uuid
-
-# Add request ID middleware
-async def add_request_id_middleware(request, call_next):
-    request_id = str(uuid.uuid4())
-    request.state.request_id = request_id
-    response = await call_next(request)
-    response.headers['X-Request-ID'] = request_id
-    return response
-
-try:
-    import structlog
-
-    # Configure structured logging
-    structlog.configure(
-        processors=[
-            structlog.processors.TimeStamper(fmt='iso'),
-            structlog.processors.JSONRenderer()
-        ],
-        logger_factory=structlog.PrintLoggerFactory(),
-    )
-except ImportError:
-    structlog = None
-
-@app.get('/metrics', tags=['Monitoring'])
-def get_metrics():
-    return {
-        'total_requests': 0,
-        'total_logs': 0,
-        'total_analyses': 0,
-        'uptime': '0:00:00'
-    }
-
-# CSRF protection
-class CSRFMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
-            token = request.headers.get('X-CSRF-Token')
-            if not token:
-                return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
-        return await call_next(request)
-
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
-
-import html
-
-def sanitize_html(content: str) -> str:
-    return html.escape(content, quote=True)
-
-from sqlalchemy.pool import QueuePool
-
-# Configure connection pool
-engine = create_engine(
-    DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-)
-
-from functools import lru_cache
-
-@lru_cache(maxsize=100)
-def get_user_by_username(username: str):
-    # Cache user lookups
-    pass
-
-# Stream CSV parsing for large files
-def parse_csv_stream(file_content: str):
-    reader = csv.DictReader(file_content.splitlines())
-    for row in reader:
-        yield row
-
-import smtplib
-from email.mime.text import MIMEText
-
-def send_alert_email(to_email: str, subject: str, body: str):
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['To'] = to_email
-    # Send via SMTP
-    with smtplib.SMTP('localhost') as server:
-        server.send_message(msg)
-
-API_KEYS = {
-    'service_a': 'key123',
-    'service_b': 'key456',
-}
-
-def validate_api_key(api_key: str) -> bool:
-    return api_key in API_KEYS.values()
-
-@app.post('/webhooks/log-created', tags=['Webhooks'])
-def handle_log_webhook(log_data: dict):
-    # Notify external systems
-    return {'status': 'received'}
-
-# Email service
-class EmailService:
-    def __init__(self, smtp_server: str, port: int):
-        self.smtp_server = smtp_server
-        self.port = port
-    
-    def send(self, to: str, subject: str, body: str):
-        msg = MIMEText(body)
-        msg['Subject'] = subject
-        msg['To'] = to
-        with smtplib.SMTP(self.smtp_server, self.port) as server:
-            server.send_message(msg)
-
-def validate_configuration():
-    required_vars = ['SECRET_KEY', 'DATABASE_URL']
-    missing = [var for var in required_vars if not os.environ.get(var)]
-    if missing and os.environ.get('TESTING') != '1':
-        raise RuntimeError(f'Missing required environment variables: {missing}')
-
-# Validate on startup
-if os.environ.get('TESTING') != '1':
-    validate_configuration()
-
-def create_error_response(status_code: int, message: str, context: dict = None) -> JSONResponse:
-    content = {'detail': message}
-    if context:
-        content['context'] = context
-    return JSONResponse(status_code=status_code, content=content)
-
-# Loki client for log aggregation
-try:
-    import requests
-except ImportError:
-    requests = None
-
-def send_to_loki(log_entry: dict):
-    if requests is None:
-        return
-    headers = {'Content-Type': 'application/json'}
-    requests.post('http://loki:3100/loki/api/v1/push', json=log_entry, headers=headers)
-
-# Jaeger tracing
-try:
-    from opentelemetry import trace
-    from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-    tracer = trace.get_tracer(__name__)
-except ImportError:
-    tracer = None
-
-@app.get('/health/detailed', tags=['Monitoring'])
-def detailed_health():
-    """Vérification détaillée de la santé : base de données, providers LLM."""
-    checks = {
-        'database': check_db(),
-        'openai': check_openai(),
-        'ollama': check_ollama(),
-    }
-    return {'status': 'ok' if all(checks.values()) else 'degraded', 'checks': checks}
-
-def check_db() -> bool:
-    try:
-        with get_engine().connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True
-    except SQLAlchemyError:
-        return False
-
-def check_openai() -> bool:
-    return os.environ.get('OPENAI_API_KEY') is not None
-
-def check_ollama() -> bool:
-    return os.environ.get('OLLAMA_BASE_URL') is not None
-
-# Observability module
-class Observability:
-    def __init__(self):
-        self.tracer = trace.get_tracer(__name__)
-    
-    def log_request(self, method: str, path: str, status_code: int):
-        with self.tracer.start_as_current_span('request'):
-            pass
-    
-    def log_error(self, error: Exception):
-        with self.tracer.start_as_current_span('error'):
-            pass
-
-# Batch processing
-def process_batch(items: list, batch_size: int = 100):
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i+batch_size]
-        yield batch
-
-# Memory-efficient bulk operations
-def bulk_insert_logs(db, logs: list, batch_size: int = 1000):
-    for i in range(0, len(logs), batch_size):
-        batch = logs[i:i+batch_size]
-        db.bulk_save_objects(batch)
-        db.commit()
-
-# Automatic log cleanup
-def cleanup_old_logs(db, days: int = 90):
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
-    db.commit()
-
-# Audit logging
-class AuditLogger:
-    def __init__(self):
-        self.logger = logging.getLogger('audit')
-    
-    def log_operation(self, user: str, action: str, resource: str):
-        self.logger.info(f'User {user} performed {action} on {resource}')
-
-@app.get('/export/logs', tags=['Export'])
-def export_logs(format: str = 'json', db: Session = Depends(get_db)):
-    """Exporte les logs au format JSON ou CSV (streaming).
-
-    - `format=json` : retourne un tableau JSON de tous les logs.
-    - `format=csv` : stream le CSV ligne par ligne pour les grands volumes.
-    """
-    if format not in ('json', 'csv'):
-        raise HTTPException(400, "Format invalide : 'json' ou 'csv' uniquement.")
-    logs = db.execute(select(Log)).scalars().all()
-    if format == 'json':
-        return [
-            {
-                "id": log.id,
-                "level": log.level,
-                "message": log.message,
-                "source": log.source,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-            }
-            for log in logs
-        ]
-    def generate():
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
-        for log in logs:
-            writer.writerow([
-                log.id,
-                log.level,
-                log.message,
-                log.source or '',
-                log.created_at.isoformat() if log.created_at else '',
-            ])
-        yield output.getvalue()
-    return StreamingResponse(generate(), media_type='text/csv')
-
-# Cleanup service
-class CleanupService:
-    def __init__(self, db: Session):
-        self.db = db
-    
-    def cleanup_old_logs(self, days: int = 90):
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        self.db.execute(Log.__table__.delete().where(Log.created_at < cutoff))
-        self.db.commit()
-    
-    def cleanup_old_analyses(self, days: int = 90):
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        self.db.execute(Analyse.__table__.delete().where(Analyse.created_at < cutoff))
-        self.db.commit()
-
-# Batch audit logging
-class BatchAuditLogger:
-    def __init__(self, batch_size: int = 100):
-        self.batch_size = batch_size
-        self.batch = []
-    
-    def add(self, entry: dict):
-        self.batch.append(entry)
-        if len(self.batch) >= self.batch_size:
-            self.flush()
-    
-    def flush(self):
-        # Write batch to storage
-        self.batch = []
-
-# Memory-efficient exports
-def stream_logs_as_csv(db: Session):
-    """Génère un stream CSV des logs pour un export de grands volumes."""
-    def generate():
-        output = StringIO()
-        writer = csv.writer(output)
-        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
-        for log in db.execute(select(Log)).scalars():
-            writer.writerow([
-                log.id,
-                log.level,
-                log.message,
-                log.source or '',
-                log.created_at.isoformat() if log.created_at else '',
-            ])
-            yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
-    return StreamingResponse(generate(), media_type='text/csv')
