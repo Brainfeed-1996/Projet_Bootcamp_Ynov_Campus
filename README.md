@@ -160,6 +160,401 @@ pytest -v
 
 ---
 
+## Guide de Déploiement Production
+
+Ce guide couvre le déploiement en production avec Docker Compose, HashiCorp Vault pour la gestion des secrets, et les variables d'environnement requises.
+
+### Prérequis Production
+
+- Docker Engine 24+ et Docker Compose v2+
+- Serveur Linux (Ubuntu 22.04+, Debian 12+, RHEL 9+)
+- 2 GB RAM minimum (4 GB recommandé)
+- 10 GB espace disque pour l'application + base de données
+- Accès réseau sortant pour pulls d'images et LLM providers (si pas en mode offline)
+- Certificats TLS valides (Let's Encrypt ou PKI interne)
+
+### Architecture de Déploiement
+
+```
+???????????????????     ???????????????????     ???????????????????
+?   Load Balancer ???????   App Replicas  ???????   PostgreSQL    ?
+?   (NGINX/Traefik)?     ?   (3+ pods)     ?     ?   (Primary)     ?
+???????????????????     ???????????????????     ???????????????????
+                                 ?                       ?
+                                 ?                       ?
+                        ???????????????????     ???????????????????
+                        ?   Vault Agent   ?     ?   Replica/      ?
+                        ?   (Sidecar)     ?     ?   Backup        ?
+                        ???????????????????     ???????????????????
+                                 ?
+                                 ?
+                        ???????????????????
+                        ?  Observability  ?
+                        ? (Loki/Prom/     ?
+                        ?  Jaeger/Grafana)?
+                        ???????????????????
+```
+
+### Fichiers de Configuration Requis
+
+#### 1. `.env.production` (depuis `.env.production.example`)
+
+```env
+# Application
+SECRET_KEY=<64-chars-hex-generate-with: openssl rand -hex 32>
+LLM_PROVIDER=fake
+LOG_LEVEL=INFO
+
+# Database (remplis par Vault en prod, ici pour référence)
+DATABASE_URL=postgresql://user:pass@db:5432/log_sentinel
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=40
+
+# LLM Providers (optionnel selon LLM_PROVIDER)
+OPENAI_API_KEY=
+OLLAMA_BASE_URL=http://ollama:11434
+
+# Rate Limiting
+RATE_LIMIT_AUTH=10/minute
+RATE_LIMIT_LOGS_WRITE=50/minute
+RATE_LIMIT_ANALYZE=30/minute
+RATE_LIMIT_DEFAULT=100/minute
+
+# Observability
+PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+JAEGER_AGENT_HOST=jaeger
+JAEGER_AGENT_PORT=6831
+LOKI_URL=http://loki:3100
+```
+
+#### 2. `docker-compose.production.yml`
+
+```yaml
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: log-sentinel:latest
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    environment:
+      - DATABASE_URL_FILE=/run/secrets/database_url
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - LLM_PROVIDER=fake
+      - LOG_LEVEL=INFO
+    secrets:
+      - database_url
+      - secret_key
+      - openai_api_key
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      vault:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  db:
+    image: postgres:15-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - POSTGRES_USER_FILE=/run/secrets/db_user
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+      - POSTGRES_DB=log_sentinel
+    secrets:
+      - db_user
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d log_sentinel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  vault:
+    image: hashicorp/vault:1.15
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    environment:
+      - VAULT_DEV_ROOT_TOKEN_FILE=/run/secrets/vault_root_token
+      - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+    secrets:
+      - vault_root_token
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Observability stack (optionnel, déployer séparément en prod)
+  loki:
+    image: grafana/loki:2.9
+    volumes:
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  prometheus:
+    image: prom/prometheus:v2.48
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:10.2
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD_FILE=/run/secrets/grafana_password
+    secrets:
+      - grafana_password
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.53
+    ports:
+      - "16686:16686"
+      - "6831:6831/udp"
+
+secrets:
+  database_url:
+    file: ./secrets/database_url.txt
+  secret_key:
+    file: ./secrets/secret_key.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
+  db_user:
+    file: ./secrets/db_user.txt
+  db_password:
+    file: ./secrets/db_password.txt
+  vault_root_token:
+    file: ./secrets/vault_root_token.txt
+  grafana_password:
+    file: ./secrets/grafana_password.txt
+
+volumes:
+  postgres_data:
+  loki_data:
+  prometheus_data:
+  grafana_data:
+```
+
+#### 3. `Dockerfile` (points clés production)
+
+```dockerfile
+FROM python:3.11-slim AS builder
+RUN pip install --no-cache-dir --upgrade pip
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+FROM python:3.11-slim
+RUN groupadd -r appuser && useradd -r -g appuser -u 1000 appuser
+COPY --from=builder /root/.local /home/appuser/.local
+WORKDIR /app
+COPY --chown=appuser:appuser . .
+USER appuser
+ENV PATH=/home/appuser/.local/bin:$PATH
+ENV PYTHONUNBUFFERED=1
+EXPOSE 5000
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:5000/health || exit 1
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "4"]
+```
+
+### Initialisation des Secrets (Production)
+
+```bash
+# 1. Créer le répertoire secrets (permissions strictes)
+mkdir -p secrets
+chmod 700 secrets
+
+# 2. Générer les secrets (exemple)
+openssl rand -hex 32 > secrets/secret_key.txt
+openssl rand -hex 16 > secrets/db_password.txt
+echo "log_sentinel" > secrets/db_user.txt
+echo "postgresql://log_sentinel:$(cat secrets/db_password.txt)@db:5432/log_sentinel" > secrets/database_url.txt
+echo "sk-your-openai-key" > secrets/openai_api_key.txt  # ou laisser vide pour fake
+openssl rand -hex 16 > secrets/vault_root_token.txt
+openssl rand -hex 16 > secrets/grafana_password.txt
+
+# 3. Verrouiller les permissions
+chmod 400 secrets/*.txt
+
+# 4. Initialiser Vault (après démarrage)
+docker compose -f compose.yaml -f docker-compose.production.yml up -d vault
+sleep 10
+docker compose -f compose.yaml -f docker-compose.production.yml exec vault vault kv put secret/log-sentinel \
+  database_url="postgresql://log_sentinel:$(cat secrets/db_password.txt)@db:5432/log_sentinel" \
+  secret_key="$(cat secrets/secret_key.txt)" \
+  openai_api_key="$(cat secrets/openai_api_key.txt)"
+
+# 5. Démarrer tous les services
+docker compose -f compose.yaml -f docker-compose.production.yml up -d
+```
+
+### Déploiement avec Vault (Recommandé)
+
+```bash
+# 1. Démarrer Vault seul
+docker compose -f compose.yaml -f docker-compose.production.yml up -d vault
+
+# 2. Configurer Vault (une seule fois)
+export VAULT_ADDR=http://localhost:8200
+export VAULT_TOKEN=$(cat secrets/vault_root_token.txt)
+vault auth enable approle
+vault policy write log-sentinel - <<EOF
+path "secret/data/log-sentinel" {
+  capabilities = ["read"]
+}
+EOF
+
+# 3. Créer un role AppRole pour l'app
+vault write auth/approle/role/log-sentinel \
+  token_policies="log-sentinel" \
+  token_ttl=1h \
+  token_max_ttl=4h
+
+# 4. Récupérer RoleID et SecretID pour l'app
+ROLE_ID=$(vault read -field=role_id auth/approle/role/log-sentinel/role-id)
+SECRET_ID=$(vault write -f -field=secret_id auth/approle/role/log-sentinel/secret-id)
+
+# 5. Stocker en secrets Docker pour l'app
+echo "$ROLE_ID" > secrets/vault_role_id.txt
+echo "$SECRET_ID" > secrets/vault_secret_id.txt
+chmod 400 secrets/vault_*.txt
+```
+
+### Checklist Pré-Déploiement
+
+- [ ] `.env.production` créé et validé
+- [ ] Secrets générés dans `./secrets/` avec `chmod 400`
+- [ ] `docker-compose.production.yml` validé (`docker compose config`)
+- [ ] Images Docker buildées et scannées (`trivy image log-sentinel:latest`)
+- [ ] Base de données initialisée (migrations si nécessaire)
+- [ ] Vault configuré et policies appliquées
+- [ ] Certificats TLS en place pour le reverse proxy
+- [ ] Réseau Docker isolé (pas d'exposition DB/Loki/Prometheus sur host)
+- [ ] Backup strategy testée (`pg_dump` vers stockage externe)
+- [ ] Monitoring/Alerting configuré (Prometheus rules, Grafana dashboards)
+
+### Commandes de Déploiement
+
+```bash
+# Build et déploiement initial
+docker compose -f compose.yaml -f docker-compose.production.yml build --no-cache
+docker compose -f compose.yaml -f docker-compose.production.yml up -d
+
+# Vérification santé
+docker compose -f compose.yaml -f docker-compose.production.yml ps
+curl -f http://localhost:5000/health
+
+# Mise à jour (zero-downtime avec replicas)
+docker compose -f compose.yaml -f docker-compose.production.yml pull
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
+
+# Rollback rapide
+docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --scale web=3 log-sentinel:v1.0.0
+
+# Logs
+docker compose -f compose.yaml -f docker-compose.production.yml logs -f web
+
+# Sauvegarde DB
+docker compose -f compose.yaml -f docker-compose.production.yml exec db \
+  pg_dump -U log_sentinel log_sentinel > backups/backup_$(date +%F).sql
+
+# Nettoyage
+docker compose -f compose.yaml -f docker-compose.production.yml down -v
+```
+
+### Variables d'Environnement Critiques
+
+| Variable | Requis | Description | Source |
+|----------|--------|-------------|--------|
+| `SECRET_KEY` | Oui | Clé JWT (64 hex chars) | Vault / Docker Secret |
+| `DATABASE_URL` | Oui | URL PostgreSQL complète | Vault / Docker Secret |
+| `LLM_PROVIDER` | Oui | `fake` \| `openai` \| `ollama` | `.env.production` |
+| `OPENAI_API_KEY` | Si OpenAI | Clé API OpenAI | Vault / Docker Secret |
+| `DB_POOL_SIZE` | Non | Pool SQLAlchemy (défaut 10) | `.env.production` |
+| `LOG_LEVEL` | Non | `DEBUG`/`INFO`/`WARNING`/`ERROR` | `.env.production` |
+
+### Sécurisation Réseau
+
+```yaml
+# Dans docker-compose.production.yml - réseaux isolés
+networks:
+  frontend:
+    driver: bridge
+    internal: false  # LB only
+  backend:
+    driver: bridge
+    internal: true   # Pas d'accès externe direct
+  vault_net:
+    driver: bridge
+    internal: true
+
+services:
+  web:
+    networks: [frontend, backend, vault_net]
+  db:
+    networks: [backend]
+  vault:
+    networks: [vault_net, backend]
+  loki:
+    networks: [backend]
+  prometheus:
+    networks: [backend]
+  grafana:
+    networks: [frontend, backend]
+  jaeger:
+    networks: [backend]
+```
+
+---
+
 ## Endpoints
 
 Le provider LLM par dÃ©faut est `fake` (dÃ©terministe, sans rÃ©seau). Pour utiliser OpenAI ou Ollama, dÃ©finissez `LLM_PROVIDER=openai` ou `LLM_PROVIDER=ollama` avec les variables d'environnement requises.
