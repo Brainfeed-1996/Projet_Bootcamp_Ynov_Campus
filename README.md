@@ -785,6 +785,197 @@ curl "http://localhost:5000/analyses?limit=10"
 
 ---
 
+### Export (`/export`)
+
+| Méthode | Endpoint | Description | Paramètres | Réponse succès |
+|---------|----------|-------------|------------|----------------|
+| `GET` | `/export/logs` | Exporter les logs en JSON/CSV | `format? (json/csv)`, `level?`, `source?`, `from?`, `to?` | `200` (fichier) |
+| `GET` | `/export/analyses` | Exporter les analyses en JSON/CSV | `format? (json/csv)`, `severity?`, `from?`, `to?` | `200` (fichier) |
+| `GET` | `/export/users` | Exporter les utilisateurs | `format? (json/csv)` | `200` (fichier) |
+
+**Export CSV — Headers de réponse :**
+```
+Content-Disposition: attachment; filename="logs_2025-09-15.csv"
+Content-Type: text/csv; charset=utf-8
+```
+
+**Exemple — Export logs en CSV :**
+```bash
+curl -X GET http://localhost:5000/export/logs?format=csv&level=ERROR \
+  -H "Authorization: Bearer <token>" \
+  -o logs_export.csv
+```
+
+**Exemple — Export analyses en JSON :**
+```bash
+curl -X GET http://localhost:5000/export/analyses?format=json&severity=HIGH \
+  -H "Authorization: Bearer <token>" \
+  -o analyses_export.json
+```
+
+### Rapport (`/report`)
+
+| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+|---------|----------|-------------|------------------|----------------|
+| `POST` | `/report/generate` | Générer un rapport PDF/HTML | `{type, date_from?, date_to?, format?}` | `201 {report_id, url}` |
+| `GET` | `/report/{report_id}` | Télécharger un rapport | — | `200` (fichier) |
+| `GET` | `/report/{report_id}/status` | Statut de génération | — | `200 {status, progress}` |
+
+**Generate Report :**
+```json
+{
+  "type": "security_audit | compliance | activity | custom",
+  "date_from": "ISO8601 datetime (optionnel)",
+  "date_to": "ISO8601 datetime (optionnel)",
+  "format": "pdf | html (défaut: pdf)",
+  "filters": {
+    "levels": ["ERROR", "CRITICAL"],
+    "sources": ["api", "postgres"],
+    "categories": ["DATABASE", "SECURITY"]
+  }
+}
+```
+
+**Report Read :**
+```json
+{
+  "id": "uuid",
+  "type": "security_audit",
+  "format": "pdf",
+  "status": "ready | generating | failed",
+  "url": "/report/<uuid>/download",
+  "created_at": "ISO8601 datetime",
+  "expires_at": "ISO8601 datetime (7 jours)",
+  "size_bytes": 123456
+}
+```
+
+**Exemple :**
+```bash
+curl -X POST http://localhost:5000/report/generate \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"type": "security_audit", "format": "pdf", "date_from": "2025-09-01T00:00:00Z"}'
+```
+
+### Webhooks (`/webhooks`)
+
+| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+|---------|----------|-------------|------------------|----------------|
+| `GET` | `/webhooks` | Lister les webhooks | — | `200 [WebhookRead]` |
+| `POST` | `/webhooks` | Créer un webhook | `WebhookCreate` | `201 WebhookRead` |
+| `GET` | `/webhooks/{webhook_id}` | Récupérer un webhook | — | `200 WebhookRead` |
+| `DELETE` | `/webhooks/{webhook_id}` | Supprimer un webhook | — | `200 {id, status}` |
+| `POST` | `/webhooks/{webhook_id}/test` | Tester un webhook | — | `200 {success, http_status}` |
+
+**WebhookCreate :**
+```json
+{
+  "url": "https://hooks.example.com/log-sentinel",
+  "events": ["log.created", "log.analyzed", "alert.triggered"],
+  "secret": "webhook-secret-key",
+  "active": true,
+  "retry_policy": {
+    "max_retries": 3,
+    "backoff_multiplier": 2,
+    "initial_delay_ms": 1000
+  }
+}
+```
+
+**WebhookRead :**
+```json
+{
+  "id": "uuid",
+  "url": "https://hooks.example.com/log-sentinel",
+  "events": ["log.created", "log.analyzed"],
+  "active": true,
+  "created_at": "ISO8601 datetime",
+  "last_triggered_at": "ISO8601 datetime | null",
+  "last_http_status": 200
+}
+```
+
+**Payload envoyé aux webhooks :**
+```json
+{
+  "event": "log.created",
+  "timestamp": "ISO8601 datetime",
+  "data": {
+    "id": 42,
+    "level": "ERROR",
+    "message": "Database connection timeout",
+    "source": "postgres"
+  },
+  "signature": "sha256=..."
+}
+```
+
+**Signature de vérification (HMAC-SHA256) :**
+```python
+import hmac, hashlib
+signature = hmac.new(
+    secret.encode(), payload.encode(), hashlib.sha256
+).hexdigest()
+# Header : X-Webhook-Signature: sha256=...
+```
+
+### Métriques (`/metrics`)
+
+| Méthode | Endpoint | Description | Réponse succès |
+|---------|----------|-------------|----------------|
+| `GET` | `/metrics` | Métriques Prometheus | Format Prometheus text |
+| `GET` | `/metrics/summary` | Résumé JSON des métriques clés | `200 {summary}` |
+
+**Résumé JSON :**
+```json
+{
+  "timestamp": "ISO8601 datetime",
+  "api": {
+    "total_requests": 15420,
+    "requests_per_minute": 42.3,
+    "error_rate_percent": 0.8,
+    "p50_response_time_ms": 25,
+    "p95_response_time_ms": 120,
+    "p99_response_time_ms": 350
+  },
+  "database": {
+    "status": "up",
+    "connections_active": 8,
+    "connections_idle": 2,
+    "total_queries": 45230,
+    "slow_queries": 3,
+    "cache_hit_rate": 0.92
+  },
+  "logs": {
+    "total_count": 12847,
+    "by_level": { "DEBUG": 2100, "INFO": 8900, "WARNING": 1200, "ERROR": 540, "CRITICAL": 107 },
+    "ingested_last_hour": 342
+  },
+  "analyses": {
+    "total_count": 12640,
+    "by_severity": { "LOW": 8900, "MEDIUM": 2500, "HIGH": 1100, "CRITICAL": 140 },
+    "by_provider": { "fake": 12640, "openai": 0, "ollama": 0 }
+  }
+}
+```
+
+**Exemple — Requête et parse Prometheus :**
+```bash
+curl -s http://localhost:5000/metrics | grep http_requests_total
+# http_requests_total{method="GET",endpoint="/logs",status="200"} 14520
+curl -s http://localhost:5000/metrics | grep http_request_duration_seconds
+# http_request_duration_seconds{p55=0.025,p95=0.120,p99=0.350}
+```
+
+**Exemple — Résumé des métriques :**
+```bash
+curl -X GET http://localhost:5000/metrics/summary \
+  -H "Authorization: Bearer <token>"
+```
+
+---
+
 ## CI/CD et scan
 
 - `.github/workflows/ci.yml` : tests, build Docker, Trivy, Snyk.
