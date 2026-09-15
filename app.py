@@ -33,6 +33,8 @@ from sqlalchemy import (
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.pool import QueuePool, StaticPool
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 from middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
@@ -67,6 +69,51 @@ RATE_LIMIT_DEFAULT = "100/minute"
 RATE_LIMIT_AUTH = "10/minute"
 RATE_LIMIT_LOGS_WRITE = "50/minute"
 RATE_LIMIT_ANALYZE = "30/minute"
+
+# --- Authentification API key (service-à-service) ---
+def _load_api_keys() -> dict[str, str]:
+    raw = os.environ.get("API_KEYS", "")
+    keys: dict[str, str] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if ":" not in entry:
+            continue
+        service, key = entry.split(":", 1)
+        keys[service.strip()] = key.strip()
+    if not keys:
+        keys = {
+            "service_a": "key123",
+            "service_b": "key456",
+        }
+    return keys
+
+
+API_KEYS = _load_api_keys()
+API_KEY_HEADER = "X-API-Key"
+
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    """Authentifie les appels service-à-service via une API key dans l'entête X-API-Key.
+
+    Les routes sous le préfixe `/admin` et `/webhooks` nécessitent une clé valide.
+    """
+
+    PROTECTED_PREFIXES = ("/admin", "/webhooks")
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        path = request.url.path
+        if not any(path.startswith(prefix) for prefix in self.PROTECTED_PREFIXES):
+            return await call_next(request)
+        api_key = request.headers.get(API_KEY_HEADER)
+        if not api_key or api_key not in API_KEYS.values():
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "API key manquante ou invalide."},
+            )
+        request.state.service_name = next(
+            (name for name, key in API_KEYS.items() if key == api_key), None
+        )
+        return await call_next(request)
 
 SENSITIVE_PATTERNS = [
     (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), '[IP_REDACTED]'),
@@ -153,7 +200,11 @@ def _create_engine():
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
+            pool_size=DB_POOL_SIZE,
+            max_overflow=DB_MAX_OVERFLOW,
             pool_pre_ping=True,
+            pool_timeout=DB_POOL_TIMEOUT,
+            pool_recycle=DB_POOL_RECYCLE,
         )
         logger.info("Using in-memory SQLite for testing.")
     else:
@@ -224,6 +275,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware, max_size=MAX_REQUEST_SIZE)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
