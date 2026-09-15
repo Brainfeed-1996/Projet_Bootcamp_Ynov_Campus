@@ -39,12 +39,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class CSRFMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
-            content_type = request.headers.get("content-type", "")
-            auth_header = request.headers.get("authorization", "")
-            if "application/json" not in content_type and not auth_header:
-                token = request.headers.get('X-CSRF-Token')
-                if not token:
-                    return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
+            accept = request.headers.get("accept", "")
+            is_browser = "text/html" in accept
+            if not is_browser:
+                return await call_next(request)
+            token = request.headers.get('X-CSRF-Token')
+            if not token:
+                return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
         return await call_next(request)
 
 

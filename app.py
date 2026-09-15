@@ -340,6 +340,22 @@ def get_llm_provider():
     raise last_error or RuntimeError("No LLM provider available")
 
 
+def process_batch(items: list, batch_size: int = 1000):
+    for offset in range(0, len(items), batch_size):
+        yield items[offset:offset + batch_size]
+
+
+def bulk_insert_logs(db: Session, logs: list[dict], batch_size: int = 1000):
+    if batch_size <= 0:
+        raise ValueError("batch_size must be greater than zero")
+    inserted = 0
+    for batch in process_batch(logs, batch_size):
+        db.execute(insert(Log), batch)
+        db.commit()
+        inserted += len(batch)
+    return inserted
+
+
 # --- Routes utilisateurs ---
 @app.get("/users/{user_id}", response_model=UserRead, tags=["Users"])
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -459,7 +475,7 @@ async def ingest_logs(request: Request, db: Session = Depends(get_db)):
     if len(payload) > MAX_BULK_ITEMS:
         return create_error_response(400, f"Trop d'éléments (max {MAX_BULK_ITEMS}).")
     errors: list[str] = []
-    ingested = 0
+    records: list[dict] = []
     for i, rec in enumerate(payload, start=1):
         if not isinstance(rec, dict):
             errors.append(f"Ligne {i} : entrée non-objet.")
@@ -478,9 +494,8 @@ async def ingest_logs(request: Request, db: Session = Depends(get_db)):
         if len(message) > 4096:
             errors.append(f"Ligne {i} : 'message' dépasse 4096 caractères.")
             continue
-        db.add(Log(level=level, message=message, source=source))
-        ingested += 1
-    db.commit()
+        records.append({"message": message, "level": level, "source": source})
+    ingested = bulk_insert_logs(db, records) if records else 0
     return BulkResult(ingested=ingested, rejected=len(errors), errors=errors)
 
 
