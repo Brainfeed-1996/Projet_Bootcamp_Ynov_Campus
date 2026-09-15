@@ -6,12 +6,13 @@ import os
 import re
 import time
 from datetime import datetime
+from io import StringIO
 
 import bcrypt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import (
     Boolean,
@@ -366,6 +367,34 @@ def bulk_insert_logs(db: Session, logs: list[dict], batch_size: int = 1000):
     return inserted
 
 
+def stream_logs_as_csv(db: Session):
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "level", "message", "source", "created_at"])
+    yield output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    stmt = (
+        select(Log)
+        .order_by(Log.created_at, Log.id)
+        .execution_options(stream_results=True)
+    )
+    for log in db.execute(stmt).scalars():
+        writer.writerow(
+            [
+                log.id,
+                log.level,
+                log.message,
+                log.source or "",
+                log.created_at.isoformat() if log.created_at else "",
+            ]
+        )
+        output.seek(0)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
 # --- Routes utilisateurs ---
 @app.get("/users/{user_id}", response_model=UserRead, tags=["Users"])
 def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -451,6 +480,15 @@ def create_log(payload: LogCreate, db: Session = Depends(get_db)):
         "source": log.source,
         "created_at": log.created_at.isoformat() if log.created_at else None,
     }
+
+
+@app.get("/logs/export", tags=["Logs"])
+def export_logs(db: Session = Depends(get_db)):
+    return StreamingResponse(
+        stream_logs_as_csv(db),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=logs.csv"},
+    )
 
 
 @app.get("/logs/{log_id}", response_model=LogRead, tags=["Logs"])
