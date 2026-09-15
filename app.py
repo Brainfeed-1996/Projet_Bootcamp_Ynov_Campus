@@ -5,7 +5,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from io import StringIO
 
@@ -822,4 +822,44 @@ def create_error_response(status_code: int, message: str, context: dict = None) 
     if context:
         content["context"] = context
     return JSONResponse(status_code=status_code, content=content)
+
+
+# --- Service de nettoyage ---
+class CleanupService:
+    """Supprime les logs et analyses plus anciens qu'un seuil (jours)."""
+
+    def __init__(self, db: Session):
+        self.db = db
+
+    def cleanup_old_logs(self, days: int = 90) -> int:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        result = self.db.execute(
+            Log.__table__.delete().where(Log.created_at < cutoff)
+        )
+        self.db.commit()
+        return result.rowcount or 0
+
+    def cleanup_old_analyses(self, days: int = 90) -> int:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        result = self.db.execute(
+            Analyse.__table__.delete().where(Analyse.created_at < cutoff)
+        )
+        self.db.commit()
+        return result.rowcount or 0
+
+
+@app.post("/admin/cleanup", tags=["Admin"])
+def cleanup_old_data(
+    days: int = 90,
+    db: Session = Depends(get_db),
+):
+    """Nettoie les logs et analyses plus anciens que `days` jours (défaut: 90)."""
+    service = CleanupService(db)
+    logs_deleted = service.cleanup_old_logs(days)
+    analyses_deleted = service.cleanup_old_analyses(days)
+    return {
+        "logs_deleted": logs_deleted,
+        "analyses_deleted": analyses_deleted,
+        "cutoff_days": days,
+    }
 
