@@ -26,7 +26,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from sqlalchemy.pool import StaticPool, QueuePool
+from sqlalchemy.pool import QueuePool, StaticPool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -311,6 +311,22 @@ class BulkResult(BaseModel):
 # --- Fournisseur LLM (remplaçable, hors ligne possible) ---
 _provider = None
 
+_PROVIDER_FALLBACK = [
+    ("openai", OpenAILLMProvider),
+    ("ollama", OllamaLLMProvider),
+    ("fake", FakeLLMProvider),
+]
+
+
+def _get_ordered_providers(requested: str):
+    if requested in ("openai", "ollama", "fake"):
+        return [
+            (name, cls) for name, cls in _PROVIDER_FALLBACK if name == requested
+        ] + [
+            (name, cls) for name, cls in _PROVIDER_FALLBACK if name != requested
+        ]
+    return _PROVIDER_FALLBACK
+
 
 def get_llm_provider():
     """Get LLM provider with fallback chain: OpenAI -> Ollama -> Fake."""
@@ -318,23 +334,11 @@ def get_llm_provider():
     if _provider is not None:
         return _provider
 
-    # Try providers in order of preference
-    providers_to_try = [
-        ("openai", OpenAILLMProvider),
-        ("ollama", OllamaLLMProvider),
-        ("fake", FakeLLMProvider),
-    ]
-
-    # Check if a specific provider is requested
     requested = os.environ.get("LLM_PROVIDER", "").lower()
-    if requested in ("openai", "ollama", "fake"):
-        # Move requested provider to front of list
-        providers_to_try = [
-            (name, cls) for name, cls in providers_to_try if name == requested
-        ] + [(name, cls) for name, cls in providers_to_try if name != requested]
+    ordered = _get_ordered_providers(requested)
 
     last_error = None
-    for name, provider_class in providers_to_try:
+    for name, provider_class in ordered:
         try:
             _provider = provider_class()
             logger.info("LLM provider initialized: %s", name)
@@ -342,9 +346,7 @@ def get_llm_provider():
         except (ProviderError, ProviderConfigurationError, RuntimeError, ValueError, OSError) as e:
             logger.warning("Failed to initialize %s provider: %s", name, e)
             last_error = e
-            continue
 
-    # If all providers fail, raise the last error
     logger.error("All LLM providers failed to initialize")
     raise last_error or RuntimeError("No LLM provider available")
 
