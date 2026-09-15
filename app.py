@@ -6,6 +6,7 @@ import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 from typing import Any, Optional
 
 import bcrypt
@@ -14,7 +15,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, Form, 
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from jose import jwt, JWTError
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import (
@@ -31,7 +32,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import QueuePool, StaticPool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
@@ -210,10 +211,6 @@ MIN_LIMIT = 1
 
 
 # --- Helpers ---
-def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
 def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode(), password_hash.encode())
 
@@ -679,23 +676,26 @@ def get_logs_optimized(db, level=None, source=None, limit=100):
 import uuid
 
 # Add request ID middleware
-def add_request_id_middleware(request, call_next):
+async def add_request_id_middleware(request, call_next):
     request_id = str(uuid.uuid4())
     request.state.request_id = request_id
     response = await call_next(request)
     response.headers['X-Request-ID'] = request_id
     return response
 
-import structlog
+try:
+    import structlog
 
-# Configure structured logging
-structlog.configure(
-    processors=[
-        structlog.processors.TimeStamper(fmt='iso'),
-        structlog.processors.JSONRenderer()
-    ],
-    logger_factory=structlog.PrintLoggerFactory(),
-)
+    # Configure structured logging
+    structlog.configure(
+        processors=[
+            structlog.processors.TimeStamper(fmt='iso'),
+            structlog.processors.JSONRenderer()
+        ],
+        logger_factory=structlog.PrintLoggerFactory(),
+    )
+except ImportError:
+    structlog = None
 
 @app.get('/metrics', tags=['Monitoring'])
 def get_metrics():
@@ -715,7 +715,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
         return await call_next(request)
 
-# Use 12 rounds for bcrypt (default is 10)
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12)).decode()
 
@@ -864,11 +863,39 @@ class AuditLogger:
 
 @app.get('/export/logs', tags=['Export'])
 def export_logs(format: str = 'json', db: Session = Depends(get_db)):
+    """Exporte les logs au format JSON ou CSV (streaming).
+
+    - `format=json` : retourne un tableau JSON de tous les logs.
+    - `format=csv` : stream le CSV ligne par ligne pour les grands volumes.
+    """
+    if format not in ('json', 'csv'):
+        raise HTTPException(400, "Format invalide : 'json' ou 'csv' uniquement.")
     logs = db.execute(select(Log)).scalars().all()
-    if format == 'csv':
-        # Export as CSV
-        pass
-    return {'logs': [log.__dict__ for log in logs]}
+    if format == 'json':
+        return [
+            {
+                "id": log.id,
+                "level": log.level,
+                "message": log.message,
+                "source": log.source,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in logs
+        ]
+    def generate():
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
+        for log in logs:
+            writer.writerow([
+                log.id,
+                log.level,
+                log.message,
+                log.source or '',
+                log.created_at.isoformat() if log.created_at else '',
+            ])
+        yield output.getvalue()
+    return StreamingResponse(generate(), media_type='text/csv')
 
 # Cleanup service
 class CleanupService:
@@ -882,7 +909,7 @@ class CleanupService:
     
     def cleanup_old_analyses(self, days: int = 90):
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-        self.db.execute(Analysis.__table__.delete().where(Analysis.created_at < cutoff))
+        self.db.execute(Analyse.__table__.delete().where(Analyse.created_at < cutoff))
         self.db.commit()
 
 # Batch audit logging
@@ -902,10 +929,20 @@ class BatchAuditLogger:
 
 # Memory-efficient exports
 def stream_logs_as_csv(db: Session):
+    """Génère un stream CSV des logs pour un export de grands volumes."""
     def generate():
-        writer = csv.writer(StringIO())
+        output = StringIO()
+        writer = csv.writer(output)
         writer.writerow(['id', 'level', 'message', 'source', 'created_at'])
         for log in db.execute(select(Log)).scalars():
-            writer.writerow([log.id, log.level, log.message, log.source, log.created_at])
-            yield writer.getvalue()
+            writer.writerow([
+                log.id,
+                log.level,
+                log.message,
+                log.source or '',
+                log.created_at.isoformat() if log.created_at else '',
+            ])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
     return StreamingResponse(generate(), media_type='text/csv')
