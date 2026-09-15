@@ -92,3 +92,21 @@ def test_webhook_missing_fields(client):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_admin_alerts_invalid_email(client):
+    """Alerte email avec un email invalide."""
+    resp = client.post('/admin/alerts', json={
+        'to_email': 'not-an-email',
+        'subject': 'Test',
+        'body': 'Test body',
+    })
+    assert resp.status_code == 422
+
+
+def test_admin_alerts_missing_fields(client):
+    """Alerte email avec des champs manquants."""
+    resp = client.post('/admin/alerts', json={
+        'to_email': 'test@example.com',
+    })
+    assert resp.status_code == 422

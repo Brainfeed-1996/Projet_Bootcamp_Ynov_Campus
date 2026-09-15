@@ -4,8 +4,10 @@ import json
 import logging
 import os
 import re
+import smtplib
 import time
 from datetime import datetime, timedelta, timezone
+from email.mime.text import MIMEText
 from functools import lru_cache
 from io import StringIO
 
@@ -862,4 +864,41 @@ def cleanup_old_data(
         "analyses_deleted": analyses_deleted,
         "cutoff_days": days,
     }
+
+
+# --- Service d'alerte email ---
+class EmailService:
+    """Envoi d'emails via SMTP pour les alertes critiques."""
+
+    def __init__(self, smtp_server: str | None = None, port: int = 587):
+        self.smtp_server = smtp_server or os.environ.get("SMTP_SERVER", "localhost")
+        self.port = port
+        self.sender = os.environ.get("ALERT_EMAIL_FROM", "log-sentinel@example.com")
+
+    def send(self, to: str, subject: str, body: str) -> None:
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["To"] = to
+        msg["From"] = self.sender
+        with smtplib.SMTP(self.smtp_server, self.port) as server:
+            server.send_message(msg)
+
+
+class AlertPayload(BaseModel):
+    to_email: str = Field(..., description="Destinataire de l'alerte")
+    subject: str = Field(..., min_length=1, max_length=200, description="Objet de l'alerte")
+    body: str = Field(..., min_length=1, max_length=4096, description="Corps de l'alerte")
+    level: str = Field("CRITICAL", description="Niveau de sévérité de l'alerte")
+
+
+@app.post("/admin/alerts", tags=["Admin"])
+def send_alert_email(payload: AlertPayload):
+    """Envoie une alerte email pour un événement critique."""
+    service = EmailService()
+    try:
+        service.send(payload.to_email, payload.subject, payload.body)
+    except (smtplib.SMTPException, OSError) as exc:
+        logger.error("Email alert failed: %s", exc)
+        return create_error_response(502, "Envoi d'email échoué.")
+    return {"status": "sent", "to": payload.to_email, "level": payload.level}
 
