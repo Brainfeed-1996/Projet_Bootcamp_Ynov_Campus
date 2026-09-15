@@ -100,6 +100,72 @@ def test_csrf_middleware_allows_api_json_requests(client):
     assert response.status_code in {200, 201, 400, 422}
 
 
+def test_csrf_middleware_rejects_browser_post_without_token(client):
+    response = client.post(
+        "/logs",
+        json={"message": "Browser request", "level": "INFO", "source": "security-test"},
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 403
+    assert "CSRF" in response.json()["detail"]
+
+
+def test_csrf_middleware_allows_browser_post_with_token(client):
+    response = client.post(
+        "/logs",
+        json={"message": "Browser request", "level": "INFO", "source": "security-test"},
+        headers={"accept": "text/html", "X-CSRF-Token": "valid-token"},
+    )
+
+    assert response.status_code in {200, 201, 400, 422}
+
+
+def test_csrf_middleware_rejects_delete_without_token(client):
+    response = client.delete(
+        "/logs/1",
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_csrf_middleware_rejects_put_without_token(client):
+    response = client.put(
+        "/logs/1",
+        json={"message": "Update", "level": "INFO", "source": "test"},
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_csrf_middleware_allows_get_without_token(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+
+
+def test_csrf_middleware_allows_patch_api_requests(client):
+    response = client.patch(
+        "/logs/1",
+        json={"message": "Update", "level": "INFO", "source": "test"},
+        headers={"accept": "application/json"},
+    )
+
+    assert response.status_code != 403
+
+
+def test_csrf_middleware_rejects_patch_browser_without_token(client):
+    response = client.patch(
+        "/logs/1",
+        json={"message": "Update", "level": "INFO", "source": "test"},
+        headers={"accept": "text/html"},
+    )
+
+    assert response.status_code == 403
+
+
 def test_ip_redaction_from_log_message(client):
     ip = "192.168.1.100"
     message = f"Connection from {ip}"
