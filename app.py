@@ -274,7 +274,6 @@ app = FastAPI(
     contact={"name": "Music Hall - DevSecOps"},
 )
 
-app.add_middleware(_RequestIDContextMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware, max_size=MAX_REQUEST_SIZE)
