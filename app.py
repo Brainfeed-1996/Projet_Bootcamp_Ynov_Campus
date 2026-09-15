@@ -126,12 +126,24 @@ def _build_database_url() -> str:
 
 
 DATABASE_URL = _build_database_url()
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+
+
+def _create_production_engine():
+    return create_engine(
+        DATABASE_URL,
+        poolclass=QueuePool,
+        pool_size=DB_POOL_SIZE,
+        max_overflow=DB_MAX_OVERFLOW,
+        pool_pre_ping=True,
+    )
 
 
 def wait_for_db(max_retries=30, delay=2):
+    engine = _create_production_engine()
     for attempt in range(1, max_retries + 1):
         try:
-            engine = create_engine(DATABASE_URL)
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             logger.info("Database connection established.")
@@ -139,6 +151,7 @@ def wait_for_db(max_retries=30, delay=2):
         except (OperationalError, SQLAlchemyError):
             logger.warning("DB not ready (attempt %s/%s)", attempt, max_retries)
             time.sleep(delay)
+    engine.dispose()
     raise RuntimeError("Database unavailable after max retries.")
 
 
@@ -787,11 +800,12 @@ class EmailService:
 def validate_configuration():
     required_vars = ['SECRET_KEY', 'DATABASE_URL']
     missing = [var for var in required_vars if not os.environ.get(var)]
-    if missing:
+    if missing and os.environ.get('TESTING') != '1':
         raise RuntimeError(f'Missing required environment variables: {missing}')
 
 # Validate on startup
-validate_configuration()
+if os.environ.get('TESTING') != '1':
+    validate_configuration()
 
 def create_error_response(status_code: int, message: str, context: dict = None) -> JSONResponse:
     content = {'detail': message}
@@ -800,26 +814,48 @@ def create_error_response(status_code: int, message: str, context: dict = None) 
     return JSONResponse(status_code=status_code, content=content)
 
 # Loki client for log aggregation
-import requests
+try:
+    import requests
+except ImportError:
+    requests = None
 
 def send_to_loki(log_entry: dict):
+    if requests is None:
+        return
     headers = {'Content-Type': 'application/json'}
     requests.post('http://loki:3100/loki/api/v1/push', json=log_entry, headers=headers)
 
 # Jaeger tracing
-from opentelemetry import trace
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-
-tracer = trace.get_tracer(__name__)
+try:
+    from opentelemetry import trace
+    from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+    tracer = trace.get_tracer(__name__)
+except ImportError:
+    tracer = None
 
 @app.get('/health/detailed', tags=['Monitoring'])
 def detailed_health():
+    """Vérification détaillée de la santé : base de données, providers LLM."""
     checks = {
         'database': check_db(),
         'openai': check_openai(),
         'ollama': check_ollama(),
     }
     return {'status': 'ok' if all(checks.values()) else 'degraded', 'checks': checks}
+
+def check_db() -> bool:
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except SQLAlchemyError:
+        return False
+
+def check_openai() -> bool:
+    return os.environ.get('OPENAI_API_KEY') is not None
+
+def check_ollama() -> bool:
+    return os.environ.get('OLLAMA_BASE_URL') is not None
 
 # Observability module
 class Observability:

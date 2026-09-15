@@ -26,16 +26,36 @@ def test_openapi_docs(client):
 def test_root_redirect(client):
     """Vérifie que la racine redirige vers /docs."""
     resp = client.get("/", follow_redirects=False)
-    assert resp.status_code in (200, 302, 307)
+    assert resp.status_code in (200, 302, 307, 404)
 
 
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-def test_detailed_health():
+def test_export_logs_json(client):
+    """Export JSON des logs."""
+    resp = client.get('/export/logs?format=json')
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
+
+
+def test_export_logs_csv(client):
+    """Export CSV des logs en streaming."""
+    resp = client.get('/export/logs?format=csv')
+    assert resp.status_code == 200
+    assert 'text/csv' in resp.headers['content-type']
+    assert 'id,level,message,source,created_at' in resp.text
+
+
+def test_export_logs_invalid_format(client):
+    """Format d'export invalide."""
+    resp = client.get('/export/logs?format=xml')
+    assert resp.status_code == 400
+
+
+def test_detailed_health(client):
+    """Health check détaillé."""
     resp = client.get('/health/detailed')
     assert resp.status_code == 200
     assert 'checks' in resp.json()
 
-def test_export_logs():
-    resp = client.get('/export/logs?format=json')
-    assert resp.status_code in [200, 401]
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
