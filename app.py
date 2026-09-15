@@ -35,6 +35,7 @@ from providers.fake_provider import FakeLLMProvider
 from providers.ollama_provider import OllamaLLMProvider
 from providers.openai_provider import OpenAILLMProvider
 from schemas.analysis import AnalysisResult
+from validators import VALID_LEVELS, check_level, check_source
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -208,7 +209,6 @@ app = FastAPI(
 app.add_middleware(RequestSizeLimitMiddleware)
 
 
-VALID_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 MAX_LIMIT = 1000
 MIN_LIMIT = 1
 
@@ -274,18 +274,12 @@ class LogCreate(BaseModel):
     @field_validator("level")
     @classmethod
     def check_level(cls, v: str) -> str:
-        v = v.upper()
-        if v not in VALID_LEVELS:
-            raise ValueError(f"level invalide : {v}. Valeurs acceptées : {sorted(VALID_LEVELS)}")
-        return v
+        return check_level(v)
 
     @field_validator("source")
     @classmethod
     def check_source(cls, v: str) -> str:
-        v = v.strip()
-        if not v:
-            raise ValueError("source ne peut pas être vide")
-        return v
+        return check_source(v)
 
 
 class LogRead(BaseModel):
