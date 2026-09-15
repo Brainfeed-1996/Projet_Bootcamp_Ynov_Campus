@@ -1,12 +1,16 @@
-# docker-compose.production.yml - Configuration de production sécurisée
+# docker-compose.production.yml - Production configuration with security hardening
 # Usage: docker compose -f compose.yaml -f docker-compose.production.yml up -d
 #
-# Limites :
-# - AUCUNE valeur par défaut pour les secrets (échec si non définis)
-# - Les secrets doivent être créés au préalable avec scripts/init-docker-secrets.sh
-# - Le filesystem est montné read_only
-# - L'utilisateur est non-root (UID 1000)
-# - Les ressources sont limitées
+# Security hardening:
+# - No default secret values (fail if undefined)
+# - Secrets must be created beforehand with scripts/init-docker-secrets.sh
+# - Filesystem mounted read_only
+# - Non-root user (UID 1000)
+# - Resource limits and reservations
+# - Capability dropping (ALL)
+# - No new privileges
+# - PID limits
+# - Structured logging with rotation
 
 services:
   web:
@@ -23,6 +27,7 @@ services:
       - secret_key
       - postgres_user
       - postgres_password
+      - openai_api_key
     environment:
       - DB_PASSWORD_FILE=/run/secrets/db_password
       - DB_USER_FILE=/run/secrets/postgres_user
@@ -30,6 +35,7 @@ services:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_NAME=music_hall
+      - OPENAI_API_KEY_FILE=/run/secrets/openai_api_key
     depends_on:
       db:
         condition: service_healthy
@@ -60,6 +66,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   db:
     image: postgres:15-alpine
@@ -79,14 +90,30 @@ services:
       timeout: 5s
       retries: 10
     read_only: false
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 50
     deploy:
       resources:
         limits:
           cpus: '1.00'
           memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
       restart_policy:
         condition: on-failure
         max_attempts: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 secrets:
   db_password:
@@ -97,81 +124,21 @@ secrets:
     file: ./secrets/postgres_user.txt
   postgres_password:
     file: ./secrets/postgres_password.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
 
 volumes:
   postgres_data:
 
 # ---
-# Limites :
-# - Les secrets doivent être créés avant le déploiement
-# - Aucun fallback ou valeur par défaut pour les mots de passe
-# - Les conteneurs ont des capacités réduites (cap_drop ALL)
-# - Le filesystem est read_only pour le service web
-# - Les ressources sont limitées pour éviter les débordements
+# Security hardening applied:
+# - read_only: true for web service
+# - cap_drop: ALL for all services
+# - no-new-privileges: true
+# - pids_limit to prevent fork bombs
+# - Resource limits and reservations
+# - Structured logging with rotation (10MB, 3 files)
+# - tmpfs for writable directories
+# - Secrets mounted via Docker secrets driver
+# - Non-root user enforced in Dockerfile
 # ---
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
-
-    secrets:
-      - db_password
-      - secret_key
-      - openai_api_key
-secrets:
-  db_password:
-    file: ./secrets/db_password
-  secret_key:
-    file: ./secrets/secret_key
-
-  backup:
-    image: postgres:15
-    environment:
-      PGUSER: appuser
-      PGPASSWORD_FILE: /run/secrets/db_password
-    volumes:
-      - backups:/backup
-    depends_on:
-      - db
-
-  loki:
-    image: grafana/loki:2.9
-    ports:
-      - "3100:3100"
-    volumes:
-      - loki-data:/loki
-    command: -config.file=/etc/loki/config.yaml
-
-  jaeger:
-    image: jaegertracing/all-in-one:1.50
-    ports:
-      - "16686:16686"
-      - "14268:14268"
-    environment:
-      - COLLECTOR_OTLP_HTTP_PORT=14268
-
-  cleanup:
-    image: bitnami/cron:8
-    environment:
-      - CRON_EXPR=0 3 * * *
-    command: >
-      sh -c 'curl -X POST http://app:5000/api/cleanup'
-    depends_on:
-      - app
