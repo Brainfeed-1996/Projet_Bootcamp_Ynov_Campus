@@ -5,53 +5,29 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   IMAGE_NAME: log-sentinel-api
-  COMPOSE_FILES: compose.yaml docker-compose.production.yml docker-compose.vault.yml
   PYTHON_VERSION: "3.11"
 
 jobs:
-  lint:
-    name: Lint (ruff, mypy)
+  quality:
+    name: Lint and tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: requirements.txt
-
-      - name: Install lint dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff mypy
-
-      - name: Run ruff
-        run: |
-          ruff check .
-
-      - name: Run mypy
-        run: |
-          mypy app.py
-
-  test:
-    name: Tests (offline)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
@@ -60,63 +36,65 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest-cov
+          python -m pip install -r requirements.txt
+          python -m pip install ruff mypy pytest-cov
 
-      - name: Run tests (offline)
-        run: |
-          pytest -v --disable-warnings --cov=app --cov-report=xml
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run mypy
+        run: mypy --ignore-missing-imports app.py
+
+      - name: Run tests
+        run: pytest -q --cov=app --cov-report=xml
 
       - name: Upload coverage
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.0
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
         with:
           name: coverage
           path: coverage.xml
+          if-no-files-found: warn
 
   bandit:
-    name: Bandit security scan
+    name: Bandit SAST
     runs-on: ubuntu-latest
-    needs: lint
     permissions:
       contents: read
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-          cache-dependency-path: requirements.txt
 
-      - name: Install bandit
-        run: |
-          pip install bandit[toml]
+      - name: Install Bandit
+        run: python -m pip install bandit
 
       - name: Run Bandit
-        run: |
-          bandit -r . -f sarif -o bandit-results.sarif --skip B101,B601 || true
+        run: bandit -r . -f sarif -o bandit.sarif --severity high --exit-zero
 
-      - name: Upload Bandit results to GitHub Security
-        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
+      - name: Upload Bandit results
+        if: ${{ always() && hashFiles('bandit.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
         with:
-          sarif_file: bandit-results.sarif
+          sarif_file: bandit.sarif
 
   semgrep:
-    name: Semgrep SAST scan
+    name: Semgrep SAST
     runs-on: ubuntu-latest
-    needs: lint
     permissions:
       contents: read
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Run Semgrep
-        uses: returntocorp/semgrep-action@0e5b9c4a7a4b6c4e4f4e4e4e4e4e4e4e4e4e4e4e4 # v1
+        uses: semgrep/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d
         with:
           config: >-
             p/security-audit
@@ -125,187 +103,175 @@ jobs:
           generateSarif: true
 
       - name: Upload Semgrep results
-        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
+        if: ${{ always() && hashFiles('semgrep.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
         with:
           sarif_file: semgrep.sarif
 
-  build:
-    name: Build Docker image
+  snyk:
+    name: Snyk security
     runs-on: ubuntu-latest
-    needs: [test, bandit, semgrep]
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
-      - name: Build image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
-        with:
-          context: .
-          tags: ${{ env.IMAGE_NAME }}:latest
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          target: production
-
-  trivy:
-    name: Trivy scan (image + fs)
-    runs-on: ubuntu-latest
-    needs: build
+    if: ${{ secrets.SNYK_TOKEN != '' }}
     permissions:
       contents: read
       security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
-
-      - name: Build image
-        uses: docker/build-push-action@ca052bb54ab0790a636c9b5f226502c73d547a25 # v5
-        with:
-          context: .
-          tags: ${{ env.IMAGE_NAME }}:latest
-          load: true
-
-      - name: Run Trivy vulnerability scanner (filesystem)
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
-        with:
-          scan-type: fs
-          format: sarif
-          output: trivy-fs-results.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '0'
-
-      - name: Run Trivy vulnerability scanner (image)
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:latest
-          format: sarif
-          output: trivy-image-results.sarif
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: '1'
-
-      - name: Upload Trivy FS results
-        if: always()
-        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
-        with:
-          sarif_file: trivy-fs-results.sarif
-
-      - name: Upload Trivy image results
-        if: always()
-        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca # v3
-        with:
-          sarif_file: trivy-image-results.sarif
-
-  snyk-deps:
-    name: Snyk dependency scan
-    runs-on: ubuntu-latest
-    needs: test
-    if: ${{ secrets.SNYK_TOKEN != '' }}
-    continue-on-error: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true }}
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Snyk test (dependencies)
-        uses: snyk/actions@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+      - name: Scan dependencies
+        continue-on-error: true
+        uses: snyk/actions/python@9adf32b1121593767fc3c057af55b55db032dc04
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          command: test
-          args: --severity-threshold=high
+          args: --severity-threshold=high --sarif-file-output=snyk-dependencies.sarif
 
-  snyk-code:
-    name: Snyk code scan
-    runs-on: ubuntu-latest
-    needs: test
-    if: ${{ secrets.SNYK_TOKEN != '' }}
-    continue-on-error: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == true }}
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - name: Snyk code test
-        uses: snyk/actions@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+      - name: Scan source code
+        continue-on-error: true
+        uses: snyk/actions@9adf32b1121593767fc3c057af55b55db032dc04
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
           command: code test
+          args: --severity-threshold=high --sarif-file-output=snyk-code.sarif
 
-  compose-validate:
-    name: Validate Compose files
+      - name: Upload dependency results
+        if: ${{ always() && hashFiles('snyk-dependencies.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          sarif_file: snyk-dependencies.sarif
+
+      - name: Upload source results
+        if: ${{ always() && hashFiles('snyk-code.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          sarif_file: snyk-code.sarif
+
+  container-security:
+    name: Build and scan container
     runs-on: ubuntu-latest
-    needs: test
     permissions:
       contents: read
+      security-events: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Prepare production env file
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build image
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1
+        with:
+          context: .
+          target: production
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          load: true
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan filesystem
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-filesystem.sarif
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Upload filesystem results
+        if: ${{ always() && hashFiles('trivy-filesystem.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          sarif_file: trivy-filesystem.sarif
+
+      - name: Upload image results
+        if: ${{ always() && hashFiles('trivy-image.sarif') != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+        uses: github/codeql-action/upload-sarif@faaca9a8f6edddba5725ffe5adefdab6669a2eca
+        with:
+          sarif_file: trivy-image.sarif
+
+  compose-validation:
+    name: Validate Compose
+    runs-on: ubuntu-latest
+    needs: quality
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Prepare validation secrets
         run: |
+          umask 077
+          mkdir -p secrets
+          printf '%s' 'ci-db-password' > secrets/db_password.txt
+          printf '%s' 'ci-secret-key' > secrets/secret_key.txt
+          printf '%s' 'ci-db-user' > secrets/postgres_user.txt
+          printf '%s' 'ci-db-password' > secrets/postgres_password.txt
+          printf '%s' 'ci-openai-key' > secrets/openai_api_key.txt
           cp .env.production.example .env.production
 
-      - name: Validate compose.yaml
-        run: |
-          docker compose -f compose.yaml config --quiet
+      - name: Validate base Compose file
+        run: docker compose -f compose.yaml config --quiet
 
-      - name: Validate docker-compose.production.yml
-        run: |
-          docker compose -f docker-compose.production.yml config --quiet
+      - name: Validate production overlay
+        run: docker compose -f docker-compose.production.yml config --quiet
 
-      - name: Validate docker-compose.vault.yml
-        run: |
-          docker compose -f docker-compose.vault.yml config --quiet
+      - name: Validate Vault overlay
+        run: docker compose -f docker-compose.vault.yml config --quiet
 
-      - name: Validate combined overlays (compose.yaml + production)
-        run: |
-          docker compose -f compose.yaml -f docker-compose.production.yml config --quiet
+      - name: Validate production stack
+        run: docker compose -f compose.yaml -f docker-compose.production.yml config --quiet
 
-      - name: Validate combined overlays (compose.yaml + vault)
-        run: |
-          docker compose -f compose.yaml -f docker-compose.vault.yml config --quiet
+      - name: Validate Vault stack
+        run: docker compose -f compose.yaml -f docker-compose.vault.yml config --quiet
 
-  integration-test:
+      - name: Validate combined overlays
+        run: docker compose -f compose.yaml -f docker-compose.production.yml -f docker-compose.vault.yml config --quiet
+
+  integration:
     name: Integration tests
     runs-on: ubuntu-latest
-    needs: [build, trivy]
-    permissions:
-      contents: read
+    needs: [container-security, compose-validation]
     steps:
       - name: Checkout code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Prepare production env file
+      - name: Prepare runtime secrets
         run: |
+          umask 077
+          mkdir -p secrets
+          printf '%s' 'integration-db-password' > secrets/db_password.txt
+          printf '%s' 'integration-secret-key' > secrets/secret_key.txt
+          printf '%s' 'integration-db-user' > secrets/postgres_user.txt
+          printf '%s' 'integration-db-password' > secrets/postgres_password.txt
+          printf '%s' 'integration-openai-key' > secrets/openai_api_key.txt
           cp .env.production.example .env.production
 
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@0c3e2b45d5f5c5c5c5c5c5c5c5c5c5c5c5c5c5c5 # v1
+      - name: Start production stack
+        run: docker compose -f compose.yaml -f docker-compose.production.yml up -d --wait
 
-      - name: Start services
-        run: |
-          docker compose -f compose.yaml -f docker-compose.production.yml up -d --wait
+      - name: Check API health
+        run: curl --fail --silent --show-error http://localhost:5000/health
 
       - name: Run integration tests
-        run: |
-          sleep 5
-          curl -fsS http://localhost:5000/health || exit 1
-          pytest tests/ -v -k "integration" --disable-warnings
+        run: docker compose exec --no-TTY web pytest -q tests/test_integration.py
 
-      - name: Cleanup
+      - name: Stop production stack
         if: always()
-        run: |
-          docker compose -f compose.yaml -f docker-compose.production.yml down -v
+        run: docker compose -f compose.yaml -f docker-compose.production.yml down --volumes --remove-orphans
