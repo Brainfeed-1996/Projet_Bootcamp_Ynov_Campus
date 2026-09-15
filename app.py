@@ -123,16 +123,24 @@ def _build_database_url() -> str:
 DATABASE_URL = _build_database_url()
 DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))
 DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))
+DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))
 
 
-def wait_for_db(max_retries=30, delay=2):
-    engine = create_engine(
+def _create_production_engine():
+    return create_engine(
         DATABASE_URL,
         poolclass=QueuePool,
         pool_size=DB_POOL_SIZE,
         max_overflow=DB_MAX_OVERFLOW,
         pool_pre_ping=True,
+        pool_timeout=DB_POOL_TIMEOUT,
+        pool_recycle=DB_POOL_RECYCLE,
     )
+
+
+def wait_for_db(max_retries=30, delay=2):
+    engine = _create_production_engine()
     for attempt in range(1, max_retries + 1):
         try:
             with engine.connect() as conn:
@@ -158,6 +166,7 @@ def _create_engine():
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
+            pool_pre_ping=True,
         )
         logger.info("Using in-memory SQLite for testing.")
     else:
