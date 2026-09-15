@@ -1732,14 +1732,237 @@ L'API utilise le versioning par URL :
 
 La version est indiquée dans le schéma OpenAPI.
 
-## Observabilité
+## Observabilité et monitoring
 
-### Stack
-- **Logs** : Loki + Grafana
-- **Metrics** : Prometheus + Grafana
-- **Tracing** : Jaeger
-- **Alerting** : Alertmanager
+Cette stack est optionnelle en développement et recommandée en production. Elle sépare les signaux sans centraliser les secrets ou les logs sensibles dans les tableaux de bord.
 
-### Dashboard
-- Disponibile à http://grafana:3000
-- Identifiants : admin/admin
+```text
+Client / healthcheck
+        |
+        v
++----------------+       +----------------+       +----------------+
+| Prometheus     |<------| API FastAPI    |------>| Loki           |
+| métriques      |       | /metrics       |       | logs structurés|
++-------+--------+       +----------------+       +-------+--------+
+        |                                               |
+        v                                               v
++----------------+       +----------------+       +----------------+
+| Grafana        |<------| Jaeger         |<------| traces OpenTelemetry |
+| dashboards     |       | UI / stockage  |       | (quand activé)    |
++----------------+       +----------------+       +----------------+
+```
+
+### Prérequis et ports
+
+- Docker Engine et Docker Compose v2.
+- L'API doit être joignable sur le réseau Docker et exposer `/health` et `/metrics`.
+- Les ports ci-dessous sont des ports locaux de consultation ; en production, publiez uniquement Grafana et Jaeger derrière un reverse proxy authentifié.
+
+| Composant | Port local | Usage |
+|-----------|------------|-------|
+| API | `5000` | `/health`, `/metrics` |
+| Prometheus | `9090` | collecte et requêtes PromQL |
+| Grafana | `3000` | dashboards et alertes |
+| Loki | `3100` | requêtes LogQL |
+| Jaeger | `16686` | recherche de traces |
+| Jaeger OTLP/UDP | `4317`, `6831` | réception des traces |
+
+### Lancer la stack locale
+
+Les commandes suivantes utilisent des conteneurs autonomes afin de rester indépendantes du fichier Compose de l'application. Adaptez les versions et le réseau à votre environnement.
+
+```bash
+# Réseau partagé avec le service web de Log Sentinel API
+docker network create log-sentinel-observability 2>/dev/null || true
+
+# Prometheus (le fichier de configuration est décrit ci-dessous)
+docker run -d --name log-sentinel-prometheus \
+  --network log-sentinel-observability \
+  -p 9090:9090 \
+  -v "$PWD/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+  prom/prometheus:v2.48.0
+
+# Loki
+docker run -d --name log-sentinel-loki \
+  --network log-sentinel-observability \
+  -p 3100:3100 \
+  grafana/loki:2.9.8
+
+# Jaeger all-in-one
+docker run -d --name log-sentinel-jaeger \
+  --network log-sentinel-observability \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  -p 6831:6831/udp \
+  jaegertracing/all-in-one:1.53.0
+
+# Grafana (mot de passe à changer avant toute exposition réseau)
+docker run -d --name log-sentinel-grafana \
+  --network log-sentinel-observability \
+  -p 3000:3000 \
+  -e GF_SECURITY_ADMIN_USER=admin \
+  -e GF_SECURITY_ADMIN_PASSWORD=admin \
+  grafana/grafana:10.2.2
+```
+
+Pour une stack Compose, ajoutez les services à un fichier d'overlay dédié et lancez :
+
+```bash
+docker compose -f compose.yaml -f docker-compose.observability.yml up -d
+docker compose -f compose.yaml -f docker-compose.observability.yml ps
+```
+
+### Configuration Prometheus
+
+Créez `config/prometheus.yml` avec une cible correspondant au nom de service de l'API. Avec `compose.yaml`, la cible est généralement `web:5000` ; avec les conteneurs autonomes, connectez le service API au réseau ou utilisez `host.docker.internal:5000` selon la plateforme.
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: log-sentinel-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["web:5000"]
+```
+
+Vérifiez la collecte :
+
+```bash
+curl -fsS http://localhost:9090/-/ready
+curl -fsS 'http://localhost:9090/api/v1/targets' | python -m json.tool
+curl -fsS http://localhost:5000/health
+curl -fsS http://localhost:5000/metrics
+```
+
+Si `/metrics` répond `404`, vérifiez que l'image déployée active l'instrumentation Prometheus ; `/health` reste le contrôle de disponibilité minimal.
+
+### Configuration Grafana
+
+1. Ouvrez `http://localhost:3000` et authentifiez-vous.
+2. Ajoutez Prometheus : **Connections ? Data sources ? Prometheus**, URL `http://log-sentinel-prometheus:9090`.
+3. Ajoutez Loki : URL `http://log-sentinel-loki:3100`.
+4. Ajoutez Jaeger : URL `http://log-sentinel-jaeger:16686`.
+5. Importez les dashboards décrits ci-dessous ou utilisez l'import JSON de Grafana.
+
+Dashboards recommandés :
+
+| Dashboard | Panneaux minimum | Requêtes / sources |
+|-----------|------------------|--------------------|
+| **Log Sentinel API — Vue générale** | requêtes/s, taux d'erreur, p50/p95/p99, santé DB, logs ingérés, analyses produites | `rate(http_requests_total[5m])`, `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))`, `/metrics` |
+| **Ingestion et qualité des logs** | volume par niveau et source, rejets bulk/CSV, taille des payloads, logs sans analyse | labels `level`, `source`, `status`, `endpoint` ; Loki + Prometheus |
+| **Sécurité et limites** | 401/403/429, tentatives par IP, rate-limit, événements de redaction, accès admin | `rate(http_requests_total{status=~"401|403|429"}[5m])`, LogQL sur les logs d'audit |
+| **Base de données** | connexions actives/idle, requêtes lentes, taille des tables, échecs healthcheck | métriques PostgreSQL/exporter et `/health` |
+| **Traces et providers LLM** | durée par route, traces par provider, erreurs/timeout, fallback fake | Jaeger service `log-sentinel-api`, spans `db`, `llm`, `http` |
+
+Exemples de requêtes PromQL à copier dans Grafana :
+
+```promql
+# Taux d'erreurs HTTP sur 5 minutes
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))
+
+# Latence p95 par endpoint
+histogram_quantile(
+  0.95,
+  sum by (le, endpoint) (rate(http_request_duration_seconds_bucket[5m]))
+)
+
+# Requêtes par minute et statut
+sum by (status) (rate(http_requests_total[5m])) * 60
+
+# Logs ingérés et analyses créées
+rate(log_sentinel_logs_created_total[5m])
+rate(log_sentinel_analyses_created_total[5m])
+
+# Provider LLM en erreur
+sum by (provider) (rate(llm_provider_errors_total[5m]))
+```
+
+### Logs avec Loki
+
+L'application doit émettre des logs structurés JSON avec, au minimum, `timestamp`, `level`, `message`, `request_id`, `route`, `source` et `duration_ms`. Les champs contenant des credentials, tokens, clés API ou données personnelles doivent être redactés avant l'envoi.
+
+Exemples LogQL :
+
+```logql
+# Tous les logs de l'API
+{job="log-sentinel-api"}
+
+# Erreurs et critiques des 15 dernières minutes
+{job="log-sentinel-api"} |= "ERROR" | duration_ms > 500
+
+# Requets avec un request_id connu
+{job="log-sentinel-api"} |= "request_id" | line_format "{{.request_id}} {{.message}}"
+
+# Recherche d'une éventuelle donnée sensible (à traiter comme alerte, pas comme affichage)
+{job="log-sentinel-api"} |~ "(?i)(password|token|api[_-]?key|authorization)"
+```
+
+Pour acheminer les logs Docker vers Loki, utilisez Promtail ou Alloy avec un job `docker` qui ajoute le label `job="log-sentinel-api"` et filtre les conteneurs `web`. Ne montez pas le socket Docker en production sans restreindre les permissions.
+
+### Traces avec Jaeger
+
+Lorsque l'instrumentation OpenTelemetry est activée, configurez l'exporteur vers `log-sentinel-jaeger:4317` (OTLP) ou `log-sentinel-jaeger:6831` (Jaeger Thrift UDP) et utilisez le nom de service `log-sentinel-api`. Propagez le `request_id` en en-tête et ajoutez des spans pour :
+
+- la réception HTTP et le code de statut ;
+- l'ingestion JSON/CSV et le nombre de lignes acceptées/rejetées ;
+- les appels PostgreSQL ;
+- l'appel au provider LLM, sans envoyer le contenu sensible du prompt ;
+- les fallback et timeouts.
+
+Consultez les traces dans `http://localhost:16686`, recherchez par `request_id`, endpoint, statut HTTP ou provider, puis corrèlez le trace ID avec les logs Grafana/Loki.
+
+### Alertes de base
+
+Importez ou adaptez ces règles Prometheus :
+
+```yaml
+groups:
+  - name: log-sentinel-slo
+    rules:
+      - alert: LogSentinelHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taux d'erreurs API supérieur à 5 %"
+
+      - alert: LogSentinelDatabaseDown
+        expr: up{job="log-sentinel-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API ou cible de santé indisponible"
+
+      - alert: LogSentinelHighLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))
+          > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latence p95 supérieure à 500 ms"
+```
+
+### Arrêt et hygiène
+
+```bash
+docker stop log-sentinel-grafana log-sentinel-prometheus log-sentinel-loki log-sentinel-jaeger
+docker rm log-sentinel-grafana log-sentinel-prometheus log-sentinel-loki log-sentinel-jaeger
+```
+
+En production, activez TLS, l'authentification Grafana, la rétention adaptée, le chiffrement des données de télémétrie et une allowlist réseau. Ne publiez pas Prometheus, Loki ou Jaeger directement sur Internet.
+
+---
+
+## Contribuer
