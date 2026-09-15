@@ -68,7 +68,128 @@ Le projet applique plusieurs couches de sÃ©curitÃ© :
 | **Denial of Service** | Indisponibilité service | Payloads volumineux, boucles LLM, DB exhaustion | Élevé | Moyenne | Request size limit (10MB), bulk limit (10k), rate limiting, timeouts LLM |
 | **Elevation of Privilege** | Élévation de privilèges | IDOR, bypass auth, role confusion | Élevé | Faible | Validation ID > 0, checks is_active, pas de role escalation API |
 
-### Matrice de Risques (Risk Matrix)
+#---
+
+## Threat Model Détaillé
+
+### Scénarios de Menaces par Domaine
+
+#### Domaine : Authentification et Identification
+
+| Scénario | ATT&CK T1078 | Description | Impact | Probabilité | Mitigation | Test de validation |
+|----------|-------------|-------------|--------|-------------|------------|-------------------|
+| **Force brute sur /auth/login** | T1110.001 | Attaques par dictionnaire sur les credentials | Élevé | Faible | Rate limit 10/min, lockout après 5 échecs, bcrypt cost 12 | `pytest tests/test_security.py::test_brute_force_protection` |
+| **JWT replay** | T1550.001 | Vol et réutilisation de token JWT | Élevé | Moyenne | Expiration 30min, rotation de clé, `jti` claim unique | `pytest tests/test_security.py::test_jwt_replay_prevention` |
+| **Credential stuffing** | T1078 | Réutilisation de creds leakées | Élevé | Moyenne | Bcrypt unique par user, MFA prévue v1.3 | Rotation secrets trimestrielle |
+| **Énumération d'users** | T1087 | Scanning `/users/{id}` pour découvrir des IDs | Moyen | Moyenne | Réponses uniformes (404), rate limit sur GET /users | Vérifier réponse identique pour user existant/inexistant |
+
+#### Domaine : Ingestion de Logs
+
+| Scénario | ATT&CK T1071.001 | Description | Impact | Probabilité | Mitigation | Test de validation |
+|----------|-------------------|-------------|--------|-------------|------------|-------------------|
+| **Injection dans message de log** | T1059.001 | Logs contenant du code exécutable | Élevé | Faible | Escaping des sorties, validation regex, sandbox LLM | `pytest tests/test_security.py::test_log_injection` |
+| **CSV injection (formulaire)** | T1235 | Fichier CSV contenant `=cmd|...` | Moyen | Moyenne | Préfixe `'=` dans les cellules, sandbox | `pytest tests/test_logs.py::test_csv_injection_rejection` |
+| **Upload fichier malveillant** | T1105 | Fichier `.py` ou `.sh` déguisé en `.csv` | Critique | Faible | Extension whitelist `.csv`, MIME check, antivirus | Vérifier seuls `.csv` acceptés |
+| **Payload > 10 MB** | T1499 | DoS via upload massif | Élevé | Moyenne | `max_upload_size=10MB` dans middleware | Tester upload 11MB ? 413 |
+
+#### Domaine : Analyse IA
+
+| Scénario | ATT&CK T1235 | Description | Impact | Probabilité | Mitigation | Test de validation |
+|----------|-------------|-------------|--------|-------------|------------|-------------------|
+| **Prompt injection** | T1235 | Log contenant des instructions pour le LLM | Élevé | Moyenne | Sanitization pre-LLM, sandbox résultat, validation schéma | `pytest tests/test_providers.py::test_prompt_injection_safety` |
+| **Exfiltration via LLM** | T1048.003 | Données sortantes via réponses LLM | Critique | Faible | Pattern blocklist PII, rate limit sortie | `pytest tests/test_security.py::test_llm_output_sanitization` |
+| **Agent IA détourné** | T1059 | Résultat LLM exécuté comme commande | Critique | Très faible | Résultat LLM jamais exécuté, traité comme données | Vérifier `eval()` jamais appelé |
+
+#### Domaine : Infrastructure et Secrets
+
+| Scénario | ATT&CK T1078 | Description | Impact | Probabilité | Mitigation | Test de validation |
+|----------|-------------|-------------|--------|-------------|------------|-------------------|
+| **Secret dans Git** | T1078 | Clé API ou password commité | Critique | Faible | `.gitignore`, git-secrets pre-commit, trufflehog CI | `pre-commit run --all-files` |
+| **Docker escape** | T1068 | Conteneur root accède à host | Critique | Très faible | Non-root (UID 1000), `cap_drop ALL`, read-only FS | Trivy scan image |
+| **Vol de token Vault** | T1003.001 | Lecture des secrets Vault | Critique | Faible | AppRole TTL 1h, audit logging, réseau isolé | Vérifier policies Vault |
+
+### Chaînes d'Attaque (Attack Chains)
+
+#### Chain 1 : Compromission complète via Rate Limit Bypass
+
+```
+[1] Scanner les endpoints (T1595.002)
+    ?
+[2] Trouver endpoint sans rate limit (T1046)
+    ?
+[3] DoS par volume de requêtes (T1499)
+    ?
+[4] Exploiter la charge pour masquer d'autres attaques (T1498)
+    ?
+[5] Injection SQL via requêtes en bulk (T1190)
+    ?
+[6] Exfiltration de données (T1041)
+```
+
+**Mitigation :** Rate limit global + par IP, WAF, monitoring anomalies.
+
+#### Chain 2 : Escalade via LLM Provider
+
+```
+[1] Injecter prompt dans log message (T1235)
+    ?
+[2] Analyser le log ? LLM exécute l'instruction cachée (T1059)
+    ?
+[3] LLM retourne des secrets dans le résultat (T1048)
+    ?
+[4] Réponse de l'API expose les secrets (T1048.003)
+```
+
+**Mitigation :** Sanitization pre-LLM, sandboxing, validation de sortie.
+
+#### Chain 3 : Vol de Secrets via Supply Chain
+
+```
+[1] Compromettre un package npm/pip dépendant (T1195.002)
+    ?
+[2] Code malveillant lit les variables d'env (T1005)
+    ?
+[3] Envoi des secrets vers serveur externe (T1048)
+    ?
+[4] Utilisation des secrets pour accéder à Vault (T1003.001)
+```
+
+**Mitigation :** `pip-audit` CI, dépendances pinées, réseau egress restrictif.
+
+### Mapping MITRE ATT&CK (Sélection Clé)
+
+| Technique ID | Technique | Tactic | Présence dans le projet | Contrôle |
+|-------------|-----------|---------|------------------------|----------|
+| T1078.003 | Cloud Accounts | Initial Access | JWT auth | Expiration + rotation |
+| T1059.001 | PowerShell / Shell | Execution | Logs contenus | Sandbox + validation |
+| T1071.001 | Web Protocols | C2 | HTTP API | TLS + rate limit |
+| T1003.001 | OS Credential Dumping | Credential Access | Secrets Vault | AppRole + audit |
+| T1005 | Data from Local System | Collection | Fichiers read-only | FS permissions |
+| T1048.003 | Exfiltration Over Unencrypted Non-C2 Protocol | Exfiltration | Réponses API | Redaction PII |
+| T1190 | Exploit Public-Facing Application | Initial Access | API endpoints | Validation Pydantic |
+| T1195.002 | Supply Chain Compromise | Supply Chain | Dépendances | pip-audit, Trivy |
+| T1235 | Data Manipulation | Impact | Logs/Analyses | Schema validation |
+| T1499 | Endpoint Denial of Service | Impact | Rate limiting | Limites par endpoint |
+| T1550.001 | Application Access Token | Persistence | JWT tokens | Court TTL (30min) |
+| T1068 | Exploitation for Privilege Escalation | Privilege Escalation | Docker escape | Non-root, cap_drop |
+
+### Enrichissement du modèle STRIDE existant avec contrôles techniques
+
+| Menace STRIDE | Contrôle technique | Outil | Fréquence | Statut |
+|---------------|-------------------|-------|-----------|--------|
+| Spoofing | JWT + bcrypt + rate limit | Custom middleware | Continu | ? |
+| Tampering | Validation Pydantic + requêtes paramétrées | SQLAlchemy | Continu | ? |
+| Repudiation | Audit logs immuables | Loki (7 ans) | Continu | ? |
+| Information Disclosure | Redaction middleware + headers | Custom middleware | Continu | ? |
+| DoS | Rate limit + size limits + timeouts | Custom middleware | Continu | ? |
+| Elevation | IDOR validation + role checks | Route dependencies | Continu | ? |
+| **Nouveau :** CSRF | CSRF token sur state-changing ops | FastAPI middleware | Continu | ? Prévu v1.3 |
+| **Nouveau :** Open Redirect | Validation URL de redirection | Validator | Continu | ? Prévu v1.3 |
+| **Nouveau :** Insecure Deserialization | Désactivation pickle, JSON uniquement | Config | Continu | ? |
+
+---
+
+## Matrice de Risques (Risk Matrix)
 
 | Probabilité \ Impact | Faible | Moyen | Élevé | Critique |
 |---------------------|--------|-------|-------|----------|
