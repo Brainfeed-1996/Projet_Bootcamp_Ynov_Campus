@@ -451,6 +451,15 @@ class BulkResult(BaseModel):
     errors: list[str] = Field(default_factory=list, description="Erreurs explicites par ligne")
 
 
+class AnalysisCreate(BaseModel):
+    log_id: int = Field(..., description="ID du log analysé")
+    severity: str = Field(..., description="Niveau de sévérité (LOW, MEDIUM, HIGH, CRITICAL)")
+    category: str = Field(..., description="Catégorie du log (ex: AUTH, NETWORK, SYSTEM)")
+    summary: str = Field(..., description="Résumé de l'analyse")
+    recommendations: list[str] = Field(..., description="Liste des recommandations")
+    provider: str = Field(..., description="Fournisseur IA utilisé (openai, ollama, fake)")
+
+
 # --- Fournisseur LLM (remplaçable, hors ligne possible) ---
 _provider = None
 
