@@ -123,6 +123,101 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         )
         return await call_next(request)
 
+
+@lru_cache(maxsize=USER_CACHE_SIZE)
+def get_user_by_username(username: str) -> tuple[int, str, str, bool] | None:
+    with SessionLocal() as db:
+        user = db.execute(
+            select(User.id, User.username, User.email, User.is_active)
+            .where(User.username == username)
+        ).first()
+        if user is None:
+            return None
+        return user.id, user.username, user.email, bool(user.is_active)
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    _instances: list["RateLimitMiddleware"] = []
+
+    def __init__(
+        self,
+        app,
+        default_limit: str = RATE_LIMIT_DEFAULT,
+        auth_limit: str = RATE_LIMIT_AUTH,
+        logs_write_limit: str = RATE_LIMIT_LOGS_WRITE,
+        analyze_limit: str = RATE_LIMIT_ANALYZE,
+    ):
+        super().__init__(app)
+        self.default_limit = self._parse_limit(default_limit)
+        self.auth_limit = self._parse_limit(auth_limit)
+        self.logs_write_limit = self._parse_limit(logs_write_limit)
+        self.analyze_limit = self._parse_limit(analyze_limit)
+        self.requests: dict[str, list[float]] = defaultdict(list)
+        RateLimitMiddleware._instances.append(self)
+
+    @classmethod
+    def reset_all(cls):
+        for instance in cls._instances:
+            instance.requests.clear()
+
+    def _parse_limit(self, limit_str: str) -> tuple[int, int]:
+        if "/" not in limit_str:
+            return int(limit_str), 60
+        count_str, period = limit_str.split("/")
+        count = int(count_str)
+        if period == "minute":
+            window = 60
+        elif period == "hour":
+            window = 3600
+        elif period == "day":
+            window = 86400
+        elif period == "second":
+            window = 1
+        else:
+            window = 60
+        return count, window
+
+    def _get_client_ip(self, request: StarletteRequest) -> str:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    def _get_limit(self, path: str, method: str) -> tuple[int, int]:
+        if path.startswith("/logs/") and path.endswith("/analyze") and method == "POST":
+            return self.analyze_limit
+        if path == "/auth/login" and method == "POST":
+            return self.auth_limit
+        if path.startswith("/logs") and method in ("POST", "PUT", "PATCH", "DELETE"):
+            return self.logs_write_limit
+        return self.default_limit
+
+    async def dispatch(self, request: StarletteRequest, call_next):
+        path = request.url.path
+        method = request.method
+        client_ip = self._get_client_ip(request)
+        key = f"{client_ip}:{path}:{method}"
+        limit, window = self._get_limit(path, method)
+        now = current_time()
+        self.requests[key] = [ts for ts in self.requests[key] if now - ts < window]
+        remaining = max(0, limit - len(self.requests[key]) - 1)
+        if len(self.requests[key]) >= limit:
+            response = JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please try again later."},
+            )
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = "0"
+            response.headers["X-RateLimit-Reset"] = str(int(now + window))
+            return response
+        self.requests[key].append(now)
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(int(now + window))
+        return response
+
+
 SENSITIVE_PATTERNS = [
     (re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b'), '[IP_REDACTED]'),
     (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), '[EMAIL_REDACTED]'),
