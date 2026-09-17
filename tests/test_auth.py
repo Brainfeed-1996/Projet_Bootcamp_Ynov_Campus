@@ -1,9 +1,9 @@
 """Tests pour les endpoints d'authentification."""
 import pytest
+from datetime import timedelta
 from fastapi.testclient import TestClient
-from app import app, get_engine, Base
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from app import Base, app, create_access_token, get_engine
+
 
 
 @pytest.fixture

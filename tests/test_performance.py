@@ -1,10 +1,27 @@
 import io
+import os
 import time
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app import Base, app, get_engine
+
+
+def _get_threshold(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is not None:
+        try:
+            return float(value)
+        except ValueError:
+            pass
+    return default
+
+
+BULK_INGEST_1K_THRESHOLD = _get_threshold("PERF_BULK_INGEST_1K_THRESHOLD", 5.0)
+CSV_INGEST_1K_THRESHOLD = _get_threshold("PERF_CSV_INGEST_1K_THRESHOLD", 5.0)
+BULK_INGEST_10K_THRESHOLD = _get_threshold("PERF_BULK_INGEST_10K_THRESHOLD", 10.0)
+HEALTH_THRESHOLD = _get_threshold("PERF_HEALTH_THRESHOLD", 1.0)
 
 
 @pytest.fixture
@@ -33,7 +50,7 @@ def test_bulk_ingest_1000_logs_performance(client):
 
     assert response.status_code == 200
     assert response.json()["ingested"] == 1000
-    assert elapsed < 5.0
+    assert elapsed < BULK_INGEST_1K_THRESHOLD
 
 
 def test_csv_ingest_1000_rows_performance(client):
@@ -51,7 +68,7 @@ def test_csv_ingest_1000_rows_performance(client):
 
     assert response.status_code == 200
     assert response.json()["ingested"] == 1000
-    assert elapsed < 5.0
+    assert elapsed < CSV_INGEST_1K_THRESHOLD
 
 
 def test_bulk_ingest_ten_thousand_logs_is_bounded(client):
@@ -66,7 +83,7 @@ def test_bulk_ingest_ten_thousand_logs_is_bounded(client):
 
     assert response.status_code == 200
     assert response.json()["ingested"] == 10000
-    assert elapsed < 10.0
+    assert elapsed < BULK_INGEST_10K_THRESHOLD
 
 
 def test_health_response_time(client):
@@ -75,7 +92,7 @@ def test_health_response_time(client):
     elapsed = time.perf_counter() - started
 
     assert response.status_code == 200
-    assert elapsed < 1.0
+    assert elapsed < HEALTH_THRESHOLD
 
 
 def test_concurrent_log_creation(client):
