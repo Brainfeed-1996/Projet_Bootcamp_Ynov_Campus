@@ -1,4 +1,3 @@
-import io
 import secrets
 import uuid
 
@@ -33,27 +32,6 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
             except ValueError:
                 pass
 
-        body = io.BytesIO()
-        async for chunk in request.stream():
-            if body.tell() + len(chunk) > self.max_size:
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "detail": f"Request body too large. Maximum size is {self.max_size} bytes."
-                    },
-                )
-            body.write(chunk)
-
-        body_bytes = body.getvalue()
-
-        async def receive():
-            return {
-                "type": "http.request",
-                "body": body_bytes,
-                "more_body": False,
-            }
-
-        request._receive = receive
         return await call_next(request)
 
 

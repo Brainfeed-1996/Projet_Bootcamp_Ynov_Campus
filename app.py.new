@@ -1,4 +1,4 @@
-﻿import atexit
+import atexit
 import csv
 import json
 import logging
@@ -395,10 +395,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
 @lru_cache(maxsize=USER_CACHE_SIZE)
 def get_user_by_username(username: str) -> tuple[int, str, str, bool] | None:
     with SessionLocal() as db:
-        user = db.execute(
-            select(User.id, User.username, User.email, User.is_active)
-            .where(User.username == username)
-        ).first()
+        user = db.execute(select(User).where(User.username == username)).scalar_one_or_none()
         if user is None:
             return None
         return user.id, user.username, user.email, bool(user.is_active)
@@ -483,12 +480,6 @@ class Analyse(Base):
     type = Column(String(50), nullable=False)
     input_data = Column(Text)
     result = Column(Text)
-    log_id = Column(Integer)
-    severity = Column(String(20))
-    category = Column(String(50))
-    summary = Column(Text)
-    recommendations = Column(Text)
-    provider = Column(String(50))
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -542,12 +533,6 @@ class AnalyseRead(BaseModel):
     type: str
     input_data: str | None
     result: str | None
-    log_id: int | None = None
-    severity: str | None = None
-    category: str | None = None
-    summary: str | None = None
-    recommendations: list[str] | None = None
-    provider: str | None = None
     created_at: datetime | None
 
     model_config = {"from_attributes": True}
@@ -881,34 +866,6 @@ def export_logs(
     )
 
 
-@app.get("/export/logs", tags=["Logs"])
-def export_logs_alt(
-    format: str = "json",
-    db: Session = Depends(get_db),
-):
-    """Export logs in JSON or CSV format."""
-    fmt = (format or "").lower()
-    if fmt == "json":
-        logs = [
-            {
-                "id": r.id,
-                "level": r.level,
-                "message": r.message,
-                "source": r.source,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in db.execute(select(Log).order_by(Log.created_at, Log.id)).scalars().all()
-        ]
-        return logs
-    if fmt == "csv":
-        return StreamingResponse(
-            stream_logs_as_csv(db, chunk_size=100),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=logs.csv"},
-        )
-    return create_error_response(400, f"format invalide : {format}. Valeurs acceptées : json, csv")
-
-
 @app.get("/logs/report", tags=["Logs"])
 def export_log_report(
     page: int = 1,
@@ -1084,42 +1041,6 @@ def get_analyses(limit: int = 50, db: Session = Depends(get_db)):
             "type": r.type,
             "input_data": r.input_data,
             "result": r.result,
-            "log_id": r.log_id,
-            "severity": r.severity,
-            "category": r.category,
-            "summary": r.summary,
-            "recommendations": json.loads(r.recommendations) if r.recommendations else None,
-            "provider": r.provider,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
-
-
-@app.get("/alerts", response_model=list[AnalyseRead], tags=["Alerts"])
-def get_alerts(limit: int = 50, db: Session = Depends(get_db)):
-    """Récupère les alertes de haute sévérité (CRITICAL, ERROR)."""
-    if limit < MIN_LIMIT or limit > MAX_LIMIT:
-        return create_error_response(400, f"limit doit être entre {MIN_LIMIT} et {MAX_LIMIT}")
-    stmt = (
-        select(Analyse)
-        .where(Analyse.severity.in_(["CRITICAL", "ERROR"]))
-        .order_by(Analyse.created_at.desc())
-        .limit(limit)
-    )
-    rows = db.execute(stmt).scalars().all()
-    return [
-        {
-            "id": r.id,
-            "type": r.type,
-            "input_data": r.input_data,
-            "result": r.result,
-            "log_id": r.log_id,
-            "severity": r.severity,
-            "category": r.category,
-            "summary": r.summary,
-            "recommendations": json.loads(r.recommendations) if r.recommendations else None,
-            "provider": r.provider,
             "created_at": r.created_at.isoformat() if r.created_at else None,
         }
         for r in rows
@@ -1128,22 +1049,12 @@ def get_alerts(limit: int = 50, db: Session = Depends(get_db)):
 
 @app.post("/analyses", response_model=AnalyseRead, status_code=201, tags=["Analyses"])
 def create_analyse(payload: dict, db: Session = Depends(get_db)):
-    if not isinstance(payload, dict):
-        return create_error_response(400, "Corps JSON invalide.")
-    analyse_type = payload.get("type", "manual")
+    if "type" not in payload:
+        return create_error_response(400, "Champ 'type' requis.")
+    analyse_type = payload["type"]
     input_data = payload.get("input_data", "")
     result = payload.get("result", "")
-    a = Analyse(
-        type=analyse_type,
-        input_data=input_data,
-        result=result,
-        log_id=payload.get("log_id"),
-        severity=payload.get("severity"),
-        category=payload.get("category"),
-        summary=payload.get("summary"),
-        recommendations=json.dumps(payload.get("recommendations", [])),
-        provider=payload.get("provider"),
-    )
+    a = Analyse(type=analyse_type, input_data=input_data, result=result)
     db.add(a)
     db.commit()
     db.refresh(a)
@@ -1152,12 +1063,6 @@ def create_analyse(payload: dict, db: Session = Depends(get_db)):
         "type": a.type,
         "input_data": a.input_data,
         "result": a.result,
-        "log_id": a.log_id,
-        "severity": a.severity,
-        "category": a.category,
-        "summary": a.summary,
-        "recommendations": json.loads(a.recommendations) if a.recommendations else None,
-        "provider": a.provider,
         "created_at": a.created_at.isoformat() if a.created_at else None,
     }
 
@@ -1173,23 +1078,6 @@ def health():
         return JSONResponse(
             status_code=503, content={"status": "error", "database": "down"}
         )
-
-
-@app.get("/health/detailed", tags=["Monitoring"])
-def detailed_health():
-    """Detailed health check with multiple checks."""
-    checks = {}
-    overall_status = "ok"
-    try:
-        with get_engine().connect() as conn:
-            conn.execute(text("SELECT 1"))
-        checks["database"] = {"status": "up"}
-    except SQLAlchemyError:
-        checks["database"] = {"status": "down"}
-        overall_status = "error"
-    checks["llm_provider"] = {"status": "available"}
-    checks["timestamp"] = datetime.utcnow().isoformat()
-    return {"status": overall_status, "checks": checks}
 
 
 # --- Gestionnaires d'erreurs explicites ---
@@ -1282,23 +1170,10 @@ class EmailService:
 
 
 class AlertPayload(BaseModel):
-    to_email: EmailStr = Field(..., description="Destinataire de l'alerte")
+    to_email: str = Field(..., description="Destinataire de l'alerte")
     subject: str = Field(..., min_length=1, max_length=200, description="Objet de l'alerte")
     body: str = Field(..., min_length=1, max_length=4096, description="Corps de l'alerte")
     level: str = Field("CRITICAL", description="Niveau de sévérité de l'alerte")
-
-
-class WebhookLogCreatedPayload(BaseModel):
-    event: str = Field(..., description="Type d'événement")
-    log_id: int = Field(..., description="ID du log")
-    level: str = Field(..., description="Niveau de sévérité")
-    message: str = Field(..., min_length=1, description="Message du log")
-    source: str = Field(..., min_length=1, description="Source du log")
-
-    @field_validator("level")
-    @classmethod
-    def check_level(cls, v: str) -> str:
-        return check_level(v)
 
 
 @app.post("/admin/alerts", tags=["Admin"])
@@ -1311,10 +1186,4 @@ def send_alert_email(payload: AlertPayload):
         logger.error("Email alert failed: %s", exc)
         return create_error_response(502, "Envoi d'email échoué.")
     return {"status": "sent", "to": payload.to_email, "level": payload.level}
-
-
-@app.post("/webhooks/log-created", tags=["Webhooks"], status_code=202)
-def webhook_log_created(payload: WebhookLogCreatedPayload):
-    """Reçoit un événement de création de log par webhook."""
-    return {"status": "received", "log_id": payload.log_id}
 

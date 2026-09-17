@@ -128,6 +128,84 @@ def generate_with_espeakng(text, slide_number):
     return mp3_path, "espeakng-fr"
 
 
+TARGET_DURATION = 660.0
+TEMPO_FACTOR = 1.9747
+
+
+def get_audio_duration(path):
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return None
+    command = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    try:
+        return float(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def concatenate_segments(mp3_files, concat_wav):
+    ffmpeg = find_ffmpeg()
+    list_file = AUDIO_DIR / "concat_list.txt"
+    with list_file.open("w", encoding="utf-8") as handle:
+        for mp3 in mp3_files:
+            handle.write(f"file '{mp3.resolve()}'\n")
+    command = [
+        ffmpeg,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(list_file),
+        "-c",
+        "copy",
+        str(concat_wav),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    list_file.unlink(missing_ok=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg concat failed: {result.stderr.strip()}")
+
+
+def apply_tempo_and_encode(concat_wav, output_mp3, tempo):
+    ffmpeg = find_ffmpeg()
+    command = [
+        ffmpeg,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-i",
+        str(concat_wav),
+        "-filter:a",
+        f"atempo={tempo}",
+        "-ar",
+        "22050",
+        "-ac",
+        "1",
+        str(output_mp3),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg atempo failed: {result.stderr.strip()}")
+
+
 def main():
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     print("=== Génération audio Narration française ===")
@@ -162,14 +240,44 @@ def main():
                 sys.exit(1)
 
     mp3_files = sorted(AUDIO_DIR.glob("slide_*.mp3"))
-    print("\n=== Terminé ===")
-    print(f"Fichiers dans: {AUDIO_DIR}")
-    for mp3_file in mp3_files:
-        print(f"  {mp3_file.name}: {mp3_file.stat().st_size / 1024:.1f} Ko")
-    print(f"\nTotal MP3: {len(mp3_files)}")
+    print(f"\nTotal MP3 par diapositive: {len(mp3_files)}")
     if len(mp3_files) != 17:
         print(f"ERREUR: 17 MP3 attendus, {len(mp3_files)} présents")
         sys.exit(1)
+
+    concat_wav = AUDIO_DIR / "concat_temp.wav"
+    output_mp3 = AUDIO_DIR / "narration.mp3"
+    print("\n=== Concaténation des segments ===")
+    concatenate_segments(mp3_files, concat_wav)
+    base_duration = get_audio_duration(concat_wav)
+    if base_duration:
+        print(f"Durée de la concaténation (brute): {base_duration:.2f}s")
+    else:
+        print("Durée de la concaténation inconnue")
+
+    print(f"\n=== Application atempo (cible {TARGET_DURATION}s) ===")
+    if base_duration:
+        tempo = base_duration / TARGET_DURATION
+        # atempo est borné à [0.5, 2.0] ; chaîner si nécessaire
+        if tempo > 2.0:
+            tempo = 2.0
+        elif tempo < 0.5:
+            tempo = 0.5
+        print(f"Facteur atempo calculé: {tempo:.4f} (brute {base_duration:.2f}s / cible {TARGET_DURATION}s)")
+    else:
+        tempo = TEMPO_FACTOR
+        print(f"Facteur atempo par défaut: {tempo}")
+    apply_tempo_and_encode(concat_wav, output_mp3, tempo)
+    concat_wav.unlink(missing_ok=True)
+
+    measured = get_audio_duration(output_mp3)
+    print("\n=== Livrable final ===")
+    print(f"Fichier: {output_mp3}")
+    if measured is not None:
+        print(f"Durée mesurée: {measured:.2f}s (cible: {TARGET_DURATION}s, écart: {measured - TARGET_DURATION:+.2f}s)")
+    else:
+        print("Durée: impossible à mesurer avec ffprobe")
+    print("Codec: MP3, 22050 Hz, mono")
 
 
 if __name__ == "__main__":
