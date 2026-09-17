@@ -44,16 +44,14 @@ services:
       - /tmp
       - /var/tmp
       - /app/.flask
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 100
     deploy:
       resources:
         limits:
           cpus: '1.00'
           memory: 512M
+          pids: 100
         reservations:
           cpus: '0.25'
           memory: 128M
@@ -93,16 +91,14 @@ services:
     tmpfs:
       - /tmp
       - /var/run/postgresql
-    security_opt:
-      - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 50
     deploy:
       resources:
         limits:
           cpus: '1.00'
           memory: 512M
+          pids: 50
         reservations:
           cpus: '0.25'
           memory: 128M

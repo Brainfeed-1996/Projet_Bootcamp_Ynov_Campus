@@ -32,10 +32,6 @@ services:
     tmpfs:
       - /tmp
       - /var/tmp
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     deploy:
       resources:
         limits:
@@ -72,14 +68,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
-    read_only: false
-    tmpfs:
-      - /tmp
-      - /var/run/postgresql
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     deploy:
       resources:
         limits:
