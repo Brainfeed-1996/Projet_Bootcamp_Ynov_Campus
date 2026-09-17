@@ -1,45 +1,54 @@
--- init-db.sql - Schéma reproductible de la base music_hall (PostgreSQL)
--- Monté via docker-compose dans /docker-entrypoint-initdb.d/ (exécuté une fois,
--- au premier démarrage du volume postgres_data). L'application crée également les
--- tables via SQLAlchemy (CREATE TABLE IF NOT EXISTS), sans conflit avec ce script.
+-- init-db.sql - Schéma d'amorçage de la base music_hall (PostgreSQL)
+-- Exécuté une fois, au premier démarrage du volume postgres_data.
+-- Ce script initialise une base vide : il ne migre pas les volumes existants et
+-- ne contient aucune opération DROP/ALTER destructive.
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+BEGIN;
 
 CREATE TABLE IF NOT EXISTS users (
     id            SERIAL PRIMARY KEY,
-    username      VARCHAR(50)  NOT NULL UNIQUE,
-    email         VARCHAR(120) NOT NULL UNIQUE,
+    username      VARCHAR(50)  NOT NULL,
+    email         VARCHAR(120) NOT NULL,
     password_hash VARCHAR(256) NOT NULL,
-    role          VARCHAR(20)  NOT NULL DEFAULT 'reader',
     is_active     BOOLEAN      DEFAULT TRUE,
-    created_at    TIMESTAMPTZ  DEFAULT NOW()
+    created_at    TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS logs (
     id          SERIAL PRIMARY KEY,
-    occurred_at TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-    level       VARCHAR(20)  NOT NULL CHECK (level IN ('DEBUG','INFO','WARNING','ERROR','CRITICAL')),
-    message     TEXT         NOT NULL,
+    level       VARCHAR(20) NOT NULL,
+    message     TEXT        NOT NULL,
     source      VARCHAR(100),
-    metadata    TEXT,
-    created_at  TIMESTAMPTZ  DEFAULT NOW()
+    created_at  TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS analyses (
-    id              SERIAL PRIMARY KEY,
-    log_id          INTEGER      NOT NULL REFERENCES logs(id) ON DELETE CASCADE,
-    severity        VARCHAR(20)  NOT NULL CHECK (severity IN ('LOW','MEDIUM','HIGH','CRITICAL')),
-    category        VARCHAR(100) NOT NULL,
-    summary         TEXT         NOT NULL,
-    recommendations TEXT         NOT NULL,
-    provider        VARCHAR(50)  NOT NULL,
-    created_at      TIMESTAMPTZ  DEFAULT NOW()
+    id          SERIAL PRIMARY KEY,
+    type        VARCHAR(50) NOT NULL,
+    input_data  TEXT,
+    result      TEXT,
+    created_at  TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index de performance pour le filtrage
-CREATE INDEX IF NOT EXISTS idx_logs_level       ON logs(level);
-CREATE INDEX IF NOT EXISTS idx_logs_source      ON logs(source);
-CREATE INDEX IF NOT EXISTS idx_logs_occurred_at ON logs(occurred_at);
-CREATE INDEX IF NOT EXISTS idx_analyses_log_id  ON analyses(log_id);
-CREATE INDEX IF NOT EXISTS idx_analyses_severity ON analyses(severity);
-CREATE INDEX IF NOT EXISTS idx_analyses_provider ON analyses(provider);
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id            SERIAL PRIMARY KEY,
+    action        VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50),
+    resource_id   INTEGER,
+    details       TEXT,
+    created_at    TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes déclarés par les modèles SQLAlchemy.
+CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users(username);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email);
+
+CREATE INDEX IF NOT EXISTS ix_logs_level ON logs(level);
+CREATE INDEX IF NOT EXISTS ix_logs_source ON logs(source);
+CREATE INDEX IF NOT EXISTS ix_logs_created_at ON logs(created_at);
+CREATE INDEX IF NOT EXISTS ix_logs_level_created_at ON logs(level, created_at);
+CREATE INDEX IF NOT EXISTS ix_logs_source_created_at ON logs(source, created_at);
+CREATE INDEX IF NOT EXISTS ix_logs_level_source_created_at
+    ON logs(level, source, created_at);
+
+COMMIT;
