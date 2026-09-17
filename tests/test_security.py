@@ -212,3 +212,257 @@ def test_redaction_plain_message_unchanged(client):
     message = "System started successfully"
     sanitized = sanitize_log_message(message)
     assert sanitized == message
+
+
+def test_xss_script_tag_stored_safely(client):
+    payload = "<script>alert('xss')</script>"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+    log_id = response.json()["id"]
+    get_response = client.get(f"/logs/{log_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["message"] == payload
+
+
+def test_xss_event_handler_stored_safely(client):
+    payload = '<img src=x onerror="alert(1)">'
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_xss_javascript_url_stored_safely(client):
+    payload = "javascript:alert(1)"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "INFO", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_xss_iframe_injection_stored_safely(client):
+    payload = "<iframe src='javascript:alert(1)'></iframe>"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_xss_svg_onload_stored_safely(client):
+    payload = "<svg onload=alert(1)>"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_sql_injection_drop_table_stored_safely(client):
+    payload = "'; DROP TABLE users; --"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "ERROR", "source": "security-test"},
+    )
+    assert response.status_code == 201
+    log_id = response.json()["id"]
+    get_response = client.get(f"/logs/{log_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["message"] == payload
+
+
+def test_sql_injection_union_select_stored_safely(client):
+    payload = "' UNION SELECT username, password FROM users; --"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "ERROR", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_sql_injection_or_1_equals_1(client):
+    payload = "' OR '1'='1"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "ERROR", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_sql_injection_semicolon_chain(client):
+    payload = "'; INSERT INTO users(username) VALUES('hacked'); --"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "ERROR", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_sql_injection_stored_xor(client):
+    payload = "' XOR 1=1 --"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "ERROR", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_semicolon(client):
+    payload = "; cat /etc/passwd"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_pipe(client):
+    payload = "| cat /etc/passwd"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_backtick(client):
+    payload = "`cat /etc/passwd`"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_dollar_paren(client):
+    payload = "$(cat /etc/passwd)"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_ampersand(client):
+    payload = "& rm -rf /"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_newline(client):
+    payload = "\ncat /etc/passwd"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_command_injection_stored_safely_does_not_execute(client):
+    payload = "normal_log; ls -la /tmp"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "INFO", "source": "security-test"},
+    )
+    assert response.status_code == 201
+    log_id = response.json()["id"]
+    get_response = client.get(f"/logs/{log_id}")
+    assert get_response.status_code == 200
+    assert get_response.json()["message"] == payload
+
+
+def test_injection_in_source_field_stored_safely(client):
+    payload = "<script>alert(1)</script>"
+    response = client.post(
+        "/logs",
+        json={"message": "test", "level": "INFO", "source": payload},
+    )
+    assert response.status_code == 201
+
+
+def test_injection_with_null_bytes(client):
+    payload = "test%00<script>alert(1)</script>"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "INFO", "source": "security-test"},
+    )
+    assert response.status_code == 201
+
+
+def test_multiple_xss_payloads_stored_safely(client):
+    payloads = [
+        "<script>alert(1)</script>",
+        "<img src=x onerror=alert(1)>",
+        "<svg onload=alert(1)>",
+        "javascript:alert(1)",
+        "<iframe src=javascript:alert(1)></iframe>",
+        "<body onload=alert(1)>",
+        "<input onfocus=alert(1) autofocus>",
+        "<details open ontoggle=alert(1)>",
+    ]
+    for payload in payloads:
+        response = client.post(
+            "/logs",
+            json={"message": payload, "level": "WARNING", "source": "xss-test"},
+        )
+        assert response.status_code == 201
+
+
+def test_sql_injection_no_schema_change(client):
+    response = client.post(
+        "/logs",
+        json={
+            "message": "'; DROP TABLE logs; ALTER TABLE users DROP COLUMN email; --",
+            "level": "ERROR",
+            "source": "injection-test",
+        },
+    )
+    assert response.status_code == 201
+    from sqlalchemy import inspect as sa_inspect
+    inspector = sa_inspect(get_engine())
+    table_names = inspector.get_table_names()
+    assert "logs" in table_names
+    assert "users" in table_names
+
+
+def test_injection_payload_in_bulk(client):
+    payloads = [
+        {"message": "<script>alert(1)</script>", "level": "WARNING", "source": "bulk"},
+        {"message": "'; DELETE FROM logs; --", "level": "ERROR", "source": "bulk"},
+        {"message": "| cat /etc/passwd", "level": "WARNING", "source": "bulk"},
+        {"message": "$(rm -rf /)", "level": "ERROR", "source": "bulk"},
+        {"message": "<iframe src=javascript:alert(1)>", "level": "WARNING", "source": "bulk"},
+    ]
+    response = client.post("/logs/bulk", json=payloads)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ingested"] == 5
+    assert body["rejected"] == 0
+
+
+def test_security_headers_on_log_response(client):
+    response = client.post(
+        "/logs",
+        json={"message": "test", "level": "INFO", "source": "security-test"},
+    )
+    assert response.status_code == 201
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+
+
+def test_xss_response_content_type_is_json(client):
+    payload = "<script>alert('xss')</script>"
+    response = client.post(
+        "/logs",
+        json={"message": payload, "level": "WARNING", "source": "security-test"},
+    )
+    assert response.status_code == 201
+    assert "application/json" in response.headers["content-type"]
