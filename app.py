@@ -1,4 +1,4 @@
-import atexit
+﻿import atexit
 import csv
 import json
 import logging
@@ -8,14 +8,19 @@ import smtplib
 import time
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
+from collections import defaultdict
 from functools import lru_cache
 from io import StringIO
+from time import time as current_time
+from typing import Optional
 
 import bcrypt
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import (
     Boolean,
