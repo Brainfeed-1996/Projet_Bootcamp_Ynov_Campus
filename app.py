@@ -519,6 +519,42 @@ def bulk_insert_logs(db: Session, logs: list[dict], batch_size: int = 1000):
     return inserted
 
 
+def serialize_log(log: Log) -> dict:
+    return {
+        "id": log.id,
+        "level": log.level,
+        "message": log.message,
+        "source": log.source,
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+    }
+
+
+def stream_logs_as_json(db: Session, chunk_size: int = 100):
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
+    stmt = (
+        select(Log)
+        .order_by(Log.created_at, Log.id)
+        .execution_options(stream_results=True)
+    )
+    yield "["
+    first_chunk = True
+    records = []
+    for log in db.execute(stmt).scalars():
+        records.append(json.dumps(serialize_log(log), ensure_ascii=False))
+        if len(records) >= chunk_size:
+            if not first_chunk:
+                yield ","
+            yield ",".join(records)
+            records = []
+            first_chunk = False
+    if records:
+        if not first_chunk:
+            yield ","
+        yield ",".join(records)
+    yield "]"
+
+
 def stream_logs_as_csv(db: Session, chunk_size: int = 100):
     output = StringIO()
     writer = csv.writer(output)
