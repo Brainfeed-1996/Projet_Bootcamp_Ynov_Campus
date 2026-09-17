@@ -74,6 +74,8 @@ def normalize_timeout(
     default: float,
 ) -> float:
     raw_value = os.environ.get(environment_variable) if timeout is None else timeout
+    if raw_value is None:
+        raw_value = default
     if isinstance(raw_value, bool):
         raise ProviderConfigurationError(
             f"{environment_variable} must be a positive number"
