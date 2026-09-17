@@ -643,6 +643,31 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     return {"id": user_id, "status": "deleted"}
 
 
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+@app.post("/auth/login", response_model=Token, tags=["Auth"])
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Authenticate user and return JWT access token."""
+    user = db.execute(select(User).where(User.username == form_data.username)).scalar_one_or_none()
+    if not user or not bcrypt.checkpw(form_data.password.encode(), user.password_hash.encode()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User is inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token = create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 # --- Routes logs ---
 @app.get("/logs", response_model=list[LogRead], tags=["Logs"])
 def get_logs(
