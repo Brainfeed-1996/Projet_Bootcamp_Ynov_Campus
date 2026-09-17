@@ -185,6 +185,8 @@ def _create_production_engine():
         pool_pre_ping=True,
         pool_timeout=DB_POOL_TIMEOUT,
         pool_recycle=DB_POOL_RECYCLE,
+        pool_use_lifo=True,
+        pool_reset_on_return="rollback",
     )
 
 
