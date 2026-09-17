@@ -338,6 +338,7 @@ app.add_middleware(APIKeyMiddleware)
 app.add_middleware(RequestSizeLimitMiddleware, max_size=MAX_REQUEST_SIZE)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 
 MAX_LIMIT = 1000
