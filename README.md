@@ -1,26 +1,26 @@
 # Log Sentinel API
 
-API **FastAPI** d'ingestion et d'analyse de logs sÃ©curisÃ©e, conÃ§ue pour un cours **DevSecOps** (Ynov  DÃ©fensive).
+API **FastAPI** d'ingestion et d'analyse de logs sécurisée, conçue pour un cours **DevSecOps** (Ynov — Défensive).
 
 **Version** : `v1.0.0`  
 **Stack** : Python 3.11+, FastAPI, PostgreSQL, Docker, Docker Compose, Trivy, Vault (optionnel).
 
-> **Note** : La documentation reflÃ¨te l'Ã©tat rÃ©el de l'implÃ©mentation. Le rate limiting (constantes dÃ©finies) n'a pas encore de middleware actif ; les tests d'attente 429 Ã©choueront jusqu'Ã  implÃ©mentation.
+> **Note** : La documentation reflète l'état réel de l'implémentation. Le rate limiting (constantes définies) n'a pas encore de middleware actif ; les tests d'attente 429 échoueront jusqu'—  implémentation.
 
 ---
 
-## Table des matiÃ¨res
+## Table des matières
 
-1. [PrÃ©requis](#prÃ©requis)
+1. [Prérequis](#prérequis)
 2. [Installation](#installation)
-3. [Tests automatisÃ©s sans IA rÃ©elle](#tests-automatisÃ©s-sans-ia-rÃ©elle)
-4. [DÃ©marrage rapide](#dÃ©marrage-rapide)
-5. [SÃ©curitÃ© et secrets](#sÃ©curitÃ©-et-secrets)
+3. [Tests automatisés sans IA réelle](#tests-automatisés-sans-ia-réelle)
+4. [Démarrage rapide](#démarrage-rapide)
+5. [Sécurité et secrets](#sécurité-et-secrets)
 6. [Endpoints](#endpoints)
 7. [CI/CD et scan](#cicd-et-scan)
-8. [DÃ©mo Demo Day](#dÃ©mo-demo-day)
-9. [ProblÃ¨mes courants et solutions](#problÃ¨mes-courants-et-solutions)
-10. [DÃ©finition of Done](#dÃ©finition-of-done)
+8. [Démo Demo Day](#démo-demo-day)
+9. [Problèmes courants et solutions](#problèmes-courants-et-solutions)
+10. [Définition of Done](#définition-of-done)
 11. [Support et nettoyage](#support-et-nettoyage)
 12. [Architecture](#architecture)
 13. [Contribuer](#contribuer)
@@ -32,23 +32,23 @@ API **FastAPI** d'ingestion et d'analyse de logs sÃ©curisÃ©e, conÃ§ue pour
 Le projet suit une architecture en 3 couches :
 
 ```
-âââââââââââââââââââ     ââââââââââââââââââââ     âââââââââââââââââââ
-â   Client HTTP   ââââââ¶â   FastAPI App    ââââââ¶â  PostgreSQL DB  â
-â   (curl/docs)   â     â   (app.py)       â     â  (users/logs)   â
-âââââââââââââââââââ     ââââââââââ¬ââââââââââ     âââââââââââââââââââ
-                                â
-                        âââââââââ´âââââââââ
-                        â  LLM Providers â
-                        â  (OpenAI/Ollamaâ
-                        â   /Fake)       â
-                        ââââââââââââââââââ
+┌─────────────────┝     ┌──────────────────┝     ┌─────────────────┝
+│   Client HTTP   │────▶│   FastAPI App    │────▶│  PostgreSQL DB  │
+│   (curl/docs)   │     │   (app.py)       │     │  (users/logs)   │
+└─────────────────┘     └────────┬─────────┘     └─────────────────┘
+                                │
+                        ┌───────┴────────┝
+                        │  LLM Providers │
+                        │  (OpenAI/Ollama│
+                        │   /Fake)       │
+                        └────────────────┘
 ```
 
 ### Composants
 
 - **app.py** : Application FastAPI principale avec authentification JWT
 - **providers/** : Fournisseurs LLM (OpenAI, Ollama, Fake pour les tests)
-- **schemas/** : ModÃ¨les Pydantic pour la validation
+- **schemas/** : Modèles Pydantic pour la validation
 - **scripts/** : Scripts d'initialisation Docker et Vault
 - **config/** : Configurations Vault (optionnel)
 - **tests/** : Suite de tests complets
@@ -57,30 +57,30 @@ Le projet suit une architecture en 3 couches :
 
 ## Contribuer
 
-1. Fork le dÃ©pÃ´t
-2. CrÃ©er une branche feature (`git checkout -b feature/ma-fonctionnalitÃ©`)
-3. Commit les changements (`git commit -m "feat: ma fonctionnalitÃ©"`)
-4. Push la branche (`git push origin feature/ma-fonctionnalitÃ©`)
-5. CrÃ©er une Pull Request
+1. Fork le dépôt
+2. Créer une branche feature (`git checkout -b feature/ma-fonctionnalité`)
+3. Commit les changements (`git commit -m "feat: ma fonctionnalité"`)
+4. Push la branche (`git push origin feature/ma-fonctionnalité`)
+5. Créer une Pull Request
 
 ### Style des commits
 
 Utiliser [Conventional Commits](https://www.conventionalcommits.org/) :
-- `feat` : Nouvelle fonctionnalitÃ©
+- `feat` : Nouvelle fonctionnalité
 - `fix` : Correction de bug
 - `docs` : Documentation
 - `test` : Tests
 - `chore` : Maintenance
 - `refactor` : Refactoring
 - `perf` : Performance
-- `security` : SÃ©curitÃ©
+- `security` : Sécurité
 
 ---
 
-## PrÃ©requis
+## Prérequis
 
 - Python 3.11+ et `pip`
-- Docker et Docker Compose (pour le conteneurisÃ©)
+- Docker et Docker Compose (pour le conteneurisé)
 - Git
 
 Variables d'environnement locales : copiez `.env.production.example` en `.env.production` et adaptez les secrets si vous lancez la production hors Docker.
@@ -89,13 +89,13 @@ Variables d'environnement locales : copiez `.env.production.example` en `.env.pr
 
 ## Installation
 
-### Sans Docker (dÃ©veloppement local)
+### Sans Docker (développement local)
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Avec Docker (recommandÃ©)
+### Avec Docker (recommandé)
 
 ```bash
 ./scripts/init-docker-secrets.sh
@@ -104,23 +104,23 @@ docker compose up --build -d
 
 ---
 
-## Tests automatisÃ©s sans IA rÃ©elle
+## Tests automatisés sans IA réelle
 
 ```bash
 pytest -v
 ```
 
-La suite utilise `LLM_PROVIDER=fake` par dÃ©faut et une base SQLite en mÃ©moire si `TESTING=1`. Aucune requÃªte vers OpenAI, Ollama ou PostgreSQL n'est exÃ©cutÃ©e.
+La suite utilise `LLM_PROVIDER=fake` par défaut et une base SQLite en mémoire si `TESTING=1`. Aucune requête vers OpenAI, Ollama ou PostgreSQL n'est exécutée.
 
 - 16 tests couvrent : health, utilisateurs, validation, logs, analyse avec fournisseur factice, gestion d'erreurs et endpoints analyses.
-- Fournisseurs IA robustifiÃ©s : validation JSON stricte, timeouts, URL sÃ©curisÃ©e, faux fournisseur dÃ©terministe.
-- Aucun secret n'est affichÃ© ni commitÃ©.
+- Fournisseurs IA robustifiés : validation JSON stricte, timeouts, URL sécurisée, faux fournisseur déterministe.
+- Aucun secret n'est affiché ni commité.
 
 ---
 
-## DÃ©marrage rapide
+## Démarrage rapide
 
-### 1. Initialiser les secrets Docker (dÃ©veloppement local)
+### 1. Initialiser les secrets Docker (développement local)
 
 ```bash
 ./scripts/init-docker-secrets.sh
@@ -134,25 +134,25 @@ docker compose ps
 curl http://localhost:5000/health
 ```
 
-### 3. ArrÃªter
+### 3. Arrêter
 
 ```bash
 docker compose down -v
 ```
 
-> **Version API** : `v1.0.0` (voir `/openapi.json` ou `/docs` pour le schÃ©ma complet). Le rate limiting est prÃ©vu (constantes dans `app.py`) mais le middleware n'est pas encore implÃ©mentÃ©.
+> **Version API** : `v1.0.0` (voir `/openapi.json` ou `/docs` pour le schéma complet). Le rate limiting est prévu (constantes dans `app.py`) mais le middleware n'est pas encore implémenté.
 
 ---
 
-## SÃ©curitÃ© et secrets
+## Sécurité et secrets
 
-- `.env` et `.env.production` sont **ignorÃ©s** par Git et Docker.
-- Les secrets sont stockÃ©s dans `./secrets/*.txt` et montÃ©s via **Docker Secrets** (`compose.yaml`, `docker-compose.production.yml`).
-- Aucune valeur par dÃ©faut n'est utilisÃ©e en production.
+- `.env` et `.env.production` sont **ignorés** par Git et Docker.
+- Les secrets sont stockés dans `./secrets/*.txt` et montés via **Docker Secrets** (`compose.yaml`, `docker-compose.production.yml`).
+- Aucune valeur par défaut n'est utilisée en production.
 - Production : `docker compose -f compose.yaml -f docker-compose.production.yml up --build -d`.
 - Vault : `docker compose -f compose.yaml -f docker-compose.vault.yml up --build -d`.
 
-> **Rate Limiting** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont dÃ©finies dans `app.py` mais **le middleware n'est pas encore implÃ©mentÃ©**. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'est pas actif.
+> **Rate Limiting** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont définies dans `app.py` mais **le middleware n'est pas encore implémenté**. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'est pas actif.
 
 ### Clean machine
 
@@ -166,20 +166,20 @@ pytest -v
 
 ---
 
-## Guide de Déploiement Production
+## Guide de D—ploiement Production
 
-Ce guide couvre le déploiement en production avec Docker Compose, HashiCorp Vault pour la gestion des secrets, et les variables d'environnement requises.
+Ce guide couvre le d—ploiement en production avec Docker Compose, HashiCorp Vault pour la gestion des secrets, et les variables d'environnement requises.
 
-### Prérequis Production
+### Pr—requis Production
 
 - Docker Engine 24+ et Docker Compose v2+
 - Serveur Linux (Ubuntu 22.04+, Debian 12+, RHEL 9+)
-- 2 GB RAM minimum (4 GB recommandé)
-- 10 GB espace disque pour l'application + base de données
-- Accès réseau sortant pour pulls d'images et LLM providers (si pas en mode offline)
+- 2 GB RAM minimum (4 GB recommand—)
+- 10 GB espace disque pour l'application + base de donn—es
+- Acc—s r—seau sortant pour pulls d'images et LLM providers (si pas en mode offline)
 - Certificats TLS valides (Let's Encrypt ou PKI interne)
 
-### Architecture de Déploiement
+### Architecture de D—ploiement
 
 ```
 ???????????????????     ???????????????????     ???????????????????
@@ -211,7 +211,7 @@ SECRET_KEY=<64-chars-hex-generate-with: openssl rand -hex 32>
 LLM_PROVIDER=fake
 LOG_LEVEL=INFO
 
-# Database (remplis par Vault en prod, ici pour référence)
+# Database (remplis par Vault en prod, ici pour r—f—rence)
 DATABASE_URL=postgresql://user:pass@db:5432/log_sentinel
 DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=40
@@ -332,7 +332,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Observability stack (optionnel, déployer séparément en prod)
+  # Observability stack (optionnel, d—ployer s—par—ment en prod)
   loki:
     image: grafana/loki:2.9
     volumes:
@@ -389,7 +389,7 @@ volumes:
   grafana_data:
 ```
 
-#### 3. `Dockerfile` (points clés production)
+#### 3. `Dockerfile` (points cl—s production)
 
 ```dockerfile
 FROM python:3.11-slim AS builder
@@ -414,11 +414,11 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "
 ### Initialisation des Secrets (Production)
 
 ```bash
-# 1. Créer le répertoire secrets (permissions strictes)
+# 1. Cr—er le r—pertoire secrets (permissions strictes)
 mkdir -p secrets
 chmod 700 secrets
 
-# 2. Générer les secrets (exemple)
+# 2. G—n—rer les secrets (exemple)
 openssl rand -hex 32 > secrets/secret_key.txt
 openssl rand -hex 16 > secrets/db_password.txt
 echo "log_sentinel" > secrets/db_user.txt
@@ -430,7 +430,7 @@ openssl rand -hex 16 > secrets/grafana_password.txt
 # 3. Verrouiller les permissions
 chmod 400 secrets/*.txt
 
-# 4. Initialiser Vault (après démarrage)
+# 4. Initialiser Vault (apr—s d—marrage)
 docker compose -f compose.yaml -f docker-compose.production.yml up -d vault
 sleep 10
 docker compose -f compose.yaml -f docker-compose.production.yml exec vault vault kv put secret/log-sentinel \
@@ -438,14 +438,14 @@ docker compose -f compose.yaml -f docker-compose.production.yml exec vault vault
   secret_key="$(cat secrets/secret_key.txt)" \
   openai_api_key="$(cat secrets/openai_api_key.txt)"
 
-# 5. Démarrer tous les services
+# 5. D—marrer tous les services
 docker compose -f compose.yaml -f docker-compose.production.yml up -d
 ```
 
-### Déploiement avec Vault (Recommandé)
+### D—ploiement avec Vault (Recommand—)
 
 ```bash
-# 1. Démarrer Vault seul
+# 1. D—marrer Vault seul
 docker compose -f compose.yaml -f docker-compose.production.yml up -d vault
 
 # 2. Configurer Vault (une seule fois)
@@ -458,13 +458,13 @@ path "secret/data/log-sentinel" {
 }
 EOF
 
-# 3. Créer un role AppRole pour l'app
+# 3. Cr—er un role AppRole pour l'app
 vault write auth/approle/role/log-sentinel \
   token_policies="log-sentinel" \
   token_ttl=1h \
   token_max_ttl=4h
 
-# 4. Récupérer RoleID et SecretID pour l'app
+# 4. R—cup—rer RoleID et SecretID pour l'app
 ROLE_ID=$(vault read -field=role_id auth/approle/role/log-sentinel/role-id)
 SECRET_ID=$(vault write -f -field=secret_id auth/approle/role/log-sentinel/secret-id)
 
@@ -474,31 +474,31 @@ echo "$SECRET_ID" > secrets/vault_secret_id.txt
 chmod 400 secrets/vault_*.txt
 ```
 
-### Checklist Pré-Déploiement
+### Checklist Pr—-D—ploiement
 
-- [ ] `.env.production` créé et validé
-- [ ] Secrets générés dans `./secrets/` avec `chmod 400`
-- [ ] `docker-compose.production.yml` validé (`docker compose config`)
-- [ ] Images Docker buildées et scannées (`trivy image log-sentinel:latest`)
-- [ ] Base de données initialisée (migrations si nécessaire)
-- [ ] Vault configuré et policies appliquées
+- [ ] `.env.production` cr—— et valid—
+- [ ] Secrets g—n—r—s dans `./secrets/` avec `chmod 400`
+- [ ] `docker-compose.production.yml` valid— (`docker compose config`)
+- [ ] Images Docker build—es et scann—es (`trivy image log-sentinel:latest`)
+- [ ] Base de donn—es initialis—e (migrations si n—cessaire)
+- [ ] Vault configur— et policies appliqu—es
 - [ ] Certificats TLS en place pour le reverse proxy
-- [ ] Réseau Docker isolé (pas d'exposition DB/Loki/Prometheus sur host)
-- [ ] Backup strategy testée (`pg_dump` vers stockage externe)
-- [ ] Monitoring/Alerting configuré (Prometheus rules, Grafana dashboards)
+- [ ] R—seau Docker isol— (pas d'exposition DB/Loki/Prometheus sur host)
+- [ ] Backup strategy test—e (`pg_dump` vers stockage externe)
+- [ ] Monitoring/Alerting configur— (Prometheus rules, Grafana dashboards)
 
-### Commandes de Déploiement
+### Commandes de D—ploiement
 
 ```bash
-# Build et déploiement initial
+# Build et d—ploiement initial
 docker compose -f compose.yaml -f docker-compose.production.yml build --no-cache
 docker compose -f compose.yaml -f docker-compose.production.yml up -d
 
-# Vérification santé
+# V—rification sant—
 docker compose -f compose.yaml -f docker-compose.production.yml ps
 curl -f http://localhost:5000/health
 
-# Mise à jour (zero-downtime avec replicas)
+# Mise — jour (zero-downtime avec replicas)
 docker compose -f compose.yaml -f docker-compose.production.yml pull
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
 
@@ -520,24 +520,24 @@ docker compose -f compose.yaml -f docker-compose.production.yml down -v
 
 | Variable | Requis | Description | Source |
 |----------|--------|-------------|--------|
-| `SECRET_KEY` | Oui | Clé JWT (64 hex chars) | Vault / Docker Secret |
-| `DATABASE_URL` | Oui | URL PostgreSQL complète | Vault / Docker Secret |
+| `SECRET_KEY` | Oui | Cl— JWT (64 hex chars) | Vault / Docker Secret |
+| `DATABASE_URL` | Oui | URL PostgreSQL compl—te | Vault / Docker Secret |
 | `LLM_PROVIDER` | Oui | `fake` \| `openai` \| `ollama` | `.env.production` |
-| `OPENAI_API_KEY` | Si OpenAI | Clé API OpenAI | Vault / Docker Secret |
-| `DB_POOL_SIZE` | Non | Pool SQLAlchemy (défaut 10) | `.env.production` |
+| `OPENAI_API_KEY` | Si OpenAI | Cl— API OpenAI | Vault / Docker Secret |
+| `DB_POOL_SIZE` | Non | Pool SQLAlchemy (d—faut 10) | `.env.production` |
 | `LOG_LEVEL` | Non | `DEBUG`/`INFO`/`WARNING`/`ERROR` | `.env.production` |
 
-### Sécurisation Réseau
+### S—curisation R—seau
 
 ```yaml
-# Dans docker-compose.production.yml - réseaux isolés
+# Dans docker-compose.production.yml - r—seaux isol—s
 networks:
   frontend:
     driver: bridge
     internal: false  # LB only
   backend:
     driver: bridge
-    internal: true   # Pas d'accès externe direct
+    internal: true   # Pas d'acc—s externe direct
   vault_net:
     driver: bridge
     internal: true
@@ -561,15 +561,15 @@ services:
 
 ---
 
-### Procédures de Déploiement Avancées
+### Proc—dures de D—ploiement Avanc—es
 
 #### Blue-Green Deployment
 
 ```bash
-# 1. Déployer la nouvelle version (green)
+# 1. D—ployer la nouvelle version (green)
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --build web
 
-# 2. Vérifier la santé du green
+# 2. V—rifier la sant— du green
 curl -f http://localhost:5000/health
 docker compose -f compose.yaml -f docker-compose.production.yml ps web
 
@@ -593,22 +593,22 @@ docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps 
 # docker-compose.production.yml - Route 10% vers canary
 # Via NGINX ou Traefik weighted routing:
 # canary_weight: 10, stable_weight: 90
-# Métriques à surveiller : erreurs, latence, CPU/mémoire
+# M—triques — surveiller : erreurs, latence, CPU/m—moire
 ```
 
 #### Disaster Recovery
 
-| Scénario | RTO (Recovery Time) | RPO (Recovery Point) | Procédure |
+| Sc—nario | RTO (Recovery Time) | RPO (Recovery Point) | Proc—dure |
 |----------|---------------------|----------------------|-----------|
 | Perte totale DB | < 15 min | < 1h | Restaurer depuis backup S3 + WAL |
-| Perte totale app | < 5 min | 0 | Redéployer Docker Compose |
+| Perte totale app | < 5 min | 0 | Red—ployer Docker Compose |
 | Perte totale Vault | < 30 min | < 1h | Restaurer depuis snapshot Vault |
-| Région entière | < 1h | < 4h | Failover multi-région (plan B) |
+| R—gion enti—re | < 1h | < 4h | Failover multi-r—gion (plan B) |
 | Ransomware | < 2h | < 24h | Restore depuis backup air-gapped |
 
-**Procédure de Restauration Complète :**
+**Proc—dure de Restauration Compl—te :**
 ```bash
-# 1. Arrêter l'environnement
+# 1. Arr—ter l'environnement
 docker compose -f compose.yaml -f docker-compose.production.yml down
 
 # 2. Restaurer la base depuis backup
@@ -621,10 +621,10 @@ docker run --rm -v postgres_data_restored:/var/lib/postgresql/data \
 cp backups/secrets_backup_*.txt secrets/
 chmod 400 secrets/*.txt
 
-# 4. Redémarrer
+# 4. Red—marrer
 docker compose -f compose.yaml -f docker-compose.production.yml up -d
 
-# 5. Vérifications
+# 5. V—rifications
 curl -f http://localhost:5000/health
 docker compose -f compose.yaml -f docker-compose.production.yml ps
 ```
@@ -639,7 +639,7 @@ docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale we
 # PgBouncer ou Supavisor pour connection pooling
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale db=1
 
-# Vérifier la distribution
+# V—rifier la distribution
 docker compose -f compose.yaml -f docker-compose.production.yml ps -a
 ```
 
@@ -650,18 +650,18 @@ docker compose -f compose.yaml -f docker-compose.production.yml ps -a
 docker volume create pgbouncer_data
 docker compose -f compose.yaml -f docker-compose.production.yml up -d pgbouncer
 
-# 2. Monitoring des requêtes lentes
+# 2. Monitoring des requ—tes lentes
 docker exec db psql -U postgres -d log_sentinel -c "
   SELECT query, mean_exec_time, calls
   FROM pg_stat_statements
   ORDER BY mean_exec_time DESC
   LIMIT 10;"
 
-# 3. VACUUM et ANALYZE programmés
+# 3. VACUUM et ANALYZE programm—s
 docker exec db psql -U postgres -d log_sentinel -c "VACUUM ANALYZE logs;"
 docker exec db psql -U postgres -d log_sentinel -c "VACUUM ANALYZE analyses;"
 
-# 4. Index recommandés pour gros volumes
+# 4. Index recommand—s pour gros volumes
 docker exec db psql -U postgres -d log_sentinel -c "
   CREATE INDEX IF NOT EXISTS idx_logs_created_at_2
   ON logs(created_at DESC) WHERE level = 'ERROR';"
@@ -673,14 +673,14 @@ docker exec db psql -U postgres -d log_sentinel -c "
 # 1. Pull la nouvelle image
 docker compose -f compose.yaml -f docker-compose.production.yml pull web
 
-# 2. Mise à jour progressive (1 par 1)
+# 2. Mise — jour progressive (1 par 1)
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
 
 # 3. Chaque conteneur passe par :
 #    - healthcheck OK ? reste
 #    - healthcheck FAIL ? rollback automatique
 
-# 4. Vérifier après chaque vague
+# 4. V—rifier apr—s chaque vague
 curl -f http://localhost:5000/health
 ```
 
@@ -720,7 +720,7 @@ server {
 }
 ```
 
-### Variables d'Environnement de Production (Récapitulatif)
+### Variables d'Environnement de Production (R—capitulatif)
 
 | Variable | Requis | Valeur Prod | Source | Exemple |
 |----------|--------|-------------|--------|---------|
@@ -731,7 +731,7 @@ server {
 | `DB_POOL_SIZE` | Non | 20 | `.env.production` | `20` |
 | `DB_MAX_OVERFLOW` | Non | 40 | `.env.production` | `40` |
 | `LLM_PROVIDER` | Oui | `fake`\|`openai`\|`ollama` | `.env.production` | `fake` |
-| `OPENAI_API_KEY` | Si OpenAI | Clé API valide | Vault/Docker Secret | `sk-...` |
+| `OPENAI_API_KEY` | Si OpenAI | Cl— API valide | Vault/Docker Secret | `sk-...` |
 | `OLLAMA_BASE_URL` | Si Ollama | URL interne | `.env.production` | `http://ollama:11434` |
 | `RATE_LIMIT_AUTH` | Non | 10/minute | `.env.production` | `10/minute` |
 | `RATE_LIMIT_LOGS_WRITE` | Non | 50/minute | `.env.production` | `50/minute` |
@@ -747,39 +747,39 @@ server {
 
 ```
 secrets/
-??? database_url.txt       # URL PostgreSQL complète (chmod 400)
-??? secret_key.txt         # Clé JWT (chmod 400)
-??? openai_api_key.txt     # Clé API OpenAI (chmod 400, optionnel)
+??? database_url.txt       # URL PostgreSQL compl—te (chmod 400)
+??? secret_key.txt         # Cl— JWT (chmod 400)
+??? openai_api_key.txt     # Cl— API OpenAI (chmod 400, optionnel)
 ??? db_user.txt            # Utilisateur DB (chmod 400)
 ??? db_password.txt        # Mot de passe DB (chmod 400)
 ??? vault_root_token.txt   # Token root Vault (chmod 400)
 ??? grafana_password.txt   # Mot de passe Grafana (chmod 400)
 ```
 
-### Verification Post-Déploiement
+### Verification Post-D—ploiement
 
 ```bash
-# 1. Santé globale
+# 1. Sant— globale
 curl -f http://localhost:5000/health
 # {"status":"ok","database":"up"}
 
-# 2. Vérifier tous les conteneurs
+# 2. V—rifier tous les conteneurs
 docker compose -f compose.yaml -f docker-compose.production.yml ps
-# TOUS doivent être "healthy"
+# TOUS doivent —tre "healthy"
 
-# 3. Vérifier les secrets montés
+# 3. V—rifier les secrets mont—s
 docker compose -f compose.yaml -f docker-compose.production.yml exec web \
   ls -la /run/secrets/
 
-# 4. Vérifier non-root
+# 4. V—rifier non-root
 docker compose -f compose.yaml -f docker-compose.production.yml exec web \
   whoami
 # Doit retourner "appuser"
 
-# 5. Vérifier headers de sécurité
+# 5. V—rifier headers de s—curit—
 curl -I https://api.logsentinel.io | grep -i "x-content\|x-frame\|x-xss\|strict"
 
-# 6. Vérifier rate limiting
+# 6. V—rifier rate limiting
 for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000/health; done
 # Les 11e+ doivent retourner 429
 ```
@@ -788,10 +788,10 @@ for i in $(seq 1 15); do curl -s -o /dev/null -w "%{http_code}\n" http://localho
 
 ## Endpoints
 
-Le provider LLM par dÃ©faut est `fake` (dÃ©terministe, sans rÃ©seau). Pour utiliser OpenAI ou Ollama, dÃ©finissez `LLM_PROVIDER=openai` ou `LLM_PROVIDER=ollama` avec les variables d'environnement requises.
+Le provider LLM par défaut est `fake` (déterministe, sans réseau). Pour utiliser OpenAI ou Ollama, définissez `LLM_PROVIDER=openai` ou `LLM_PROVIDER=ollama` avec les variables d'environnement requises.
 
 ```bash
-# SantÃ©
+# Santé
 curl http://localhost:5000/health
 
 # Utilisateurs
@@ -813,25 +813,25 @@ curl http://localhost:5000/analyses
 
 ---
 
-## Référence API Complète
+## R—f—rence API Compl—te
 
-L'API est documentée via OpenAPI/Swagger à `/docs` (interface interactive) et `/openapi.json` (schéma brut).
+L'API est document—e via OpenAPI/Swagger — `/docs` (interface interactive) et `/openapi.json` (sch—ma brut).
 
 ### Authentification
 
-L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt cost 12). L'endpoint `POST /auth/login` est **non implémenté** dans cette version ; les routes protégées ne sont pas encore appliquées globalement. Voir `GET /users/{id}` pour lecture seule sans token.
+L'authentification JWT est configur—e (middleware, expiration 30 min, bcrypt cost 12). L'endpoint `POST /auth/login` est **non impl—ment—** dans cette version ; les routes prot—g—es ne sont pas encore appliqu—es globalement. Voir `GET /users/{id}` pour lecture seule sans token.
 
 ### Rate Limiting
 
-> **Non implémenté** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont définies dans `app.py` mais **aucun middleware n'est actif**. Les headers `X-RateLimit-*` ne sont pas retournés. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'existe pas encore.
+> **Non impl—ment—** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont d—finies dans `app.py` mais **aucun middleware n'est actif**. Les headers `X-RateLimit-*` ne sont pas retourn—s. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'existe pas encore.
 
 ### Utilisateurs (`/users`)
 
-| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+| M—thode | Endpoint | Description | Corps de requ—te | R—ponse succ—s |
 |---------|----------|-------------|------------------|----------------|
-| `GET` | `/users/{user_id}` | Récupérer un utilisateur par ID |  | `200 UserRead` |
-| `POST` | `/users` | Créer un utilisateur | `UserCreate` | `201 UserRead` |
-| `DELETE` | `/users/{user_id}` | Désactiver un utilisateur (soft delete) |  | `200 {id, status}` |
+| `GET` | `/users/{user_id}` | R—cup—rer un utilisateur par ID | — | `200 UserRead` |
+| `POST` | `/users` | Cr—er un utilisateur | `UserCreate` | `201 UserRead` |
+| `DELETE` | `/users/{user_id}` | D—sactiver un utilisateur (soft delete) | — | `200 {id, status}` |
 
 **UserCreate** :
 ```json
@@ -855,28 +855,28 @@ L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt co
 **Erreurs** :
 - `400` : ID invalide (? 0)
 - `404` : Utilisateur introuvable ou inactif
-- `409` : Username ou email déjà existant
-- `422` : Validation échouée (champs manquants, format invalide)
+- `409` : Username ou email d—j— existant
+- `422` : Validation —chou—e (champs manquants, format invalide)
 
 ### Logs (`/logs`)
 
-| Méthode | Endpoint | Description | Paramètres / Corps | Réponse succès |
+| M—thode | Endpoint | Description | Param—tres / Corps | R—ponse succ—s |
 |---------|----------|-------------|-------------------|----------------|
-| `GET` | `/logs` | Lister les logs avec filtres | `level?`, `source?`, `limit? (1-1000, défaut 100)` | `200 [LogRead]` |
-| `POST` | `/logs` | Créer un log | `LogCreate` | `201 LogRead` |
-| `GET` | `/logs/{log_id}` | Récupérer un log par ID |  | `200 LogRead` |
+| `GET` | `/logs` | Lister les logs avec filtres | `level?`, `source?`, `limit? (1-1000, d—faut 100)` | `200 [LogRead]` |
+| `POST` | `/logs` | Cr—er un log | `LogCreate` | `201 LogRead` |
+| `GET` | `/logs/{log_id}` | R—cup—rer un log par ID | — | `200 LogRead` |
 | `POST` | `/logs/bulk` | Ingestion bulk JSON | `[LogCreate, ...]` (max 10000) | `200 BulkResult` |
 | `POST` | `/logs/ingest-csv` | Ingestion CSV (multipart) | Fichier `.csv` avec colonnes `message`, `level?`, `source?` | `200 BulkResult` |
-| `POST` | `/logs/{log_id}/analyze` | Analyser un log via LLM |  | `201 {id, log_id, result}` |
-| `GET` | `/logs/export` | Export CSV streaming (tous logs) | `chunk_size? (défaut 100)` | `text/csv` stream |
-| `GET` | `/logs/report` | Export CSV paginé avec filtres | `page?`, `page_size?`, `level?`, `source?` | `text/csv` stream |
+| `POST` | `/logs/{log_id}/analyze` | Analyser un log via LLM | — | `201 {id, log_id, result}` |
+| `GET` | `/logs/export` | Export CSV streaming (tous logs) | `chunk_size? (d—faut 100)` | `text/csv` stream |
+| `GET` | `/logs/report` | Export CSV pagin— avec filtres | `page?`, `page_size?`, `level?`, `source?` | `text/csv` stream |
 
 **LogCreate** :
 ```json
 {
   "message": "string (1-4096 chars, requis)",
-  "level": "string (DEBUG/INFO/WARNING/ERROR/CRITICAL, défaut INFO)",
-  "source": "string (1-100 chars, défaut 'unknown')"
+  "level": "string (DEBUG/INFO/WARNING/ERROR/CRITICAL, d—faut INFO)",
+  "source": "string (1-100 chars, d—faut 'unknown')"
 }
 ```
 
@@ -919,16 +919,16 @@ L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt co
 - `400` : ID invalide, limit hors bornes, level invalide, source vide
 - `404` : Log introuvable
 - `413` : Corps trop volumineux (> 10 MB) ou fichier CSV trop gros
-- `422` : Validation échouée, CSV invalide (colonne `message` requise)
+- `422` : Validation —chou—e, CSV invalide (colonne `message` requise)
 - `502` : Provider LLM indisponible
-- `503` : Base de données indisponible
+- `503` : Base de donn—es indisponible
 
 ### Analyses (`/analyses`)
 
-| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+| M—thode | Endpoint | Description | Corps de requ—te | R—ponse succ—s |
 |---------|----------|-------------|------------------|----------------|
-| `GET` | `/analyses` | Lister les analyses | `limit? (1-1000, défaut 50)` | `200 [AnalyseRead]` |
-| `POST` | `/analyses` | Créer une analyse manuelle | `{type, input_data?, result?}` | `201 AnalyseRead` |
+| `GET` | `/analyses` | Lister les analyses | `limit? (1-1000, d—faut 50)` | `200 [AnalyseRead]` |
+| `POST` | `/analyses` | Cr—er une analyse manuelle | `{type, input_data?, result?}` | `201 AnalyseRead` |
 
 **AnalyseRead** :
 ```json
@@ -941,21 +941,21 @@ L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt co
 }
 ```
 
-### Santé et Monitoring (`/health`, `/metrics`)
+### Sant— et Monitoring (`/health`, `/metrics`)
 
-| Méthode | Endpoint | Description | Réponse succès |
+| M—thode | Endpoint | Description | R—ponse succ—s |
 |---------|----------|-------------|----------------|
-| `GET` | `/health` | Vérifier santé API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
-| `GET` | `/metrics` | Métriques Prometheus (si configuré) | Format Prometheus text |
+| `GET` | `/health` | V—rifier sant— API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
+| `GET` | `/metrics` | M—triques Prometheus (si configur—) | Format Prometheus text |
 
 ### Codes d'erreur globaux
 
 | Code | Signification |
 |------|---------------|
-| `200` | Succès (GET, PUT, DELETE) |
-| `201` | Créé (POST) |
-| `400` | Requête invalide (paramètres, validation métier) |
-| `401` | Non authentifié (token manquant/invalide) |
+| `200` | Succ—s (GET, PUT, DELETE) |
+| `201` | Cr—— (POST) |
+| `400` | Requ—te invalide (param—tres, validation m—tier) |
+| `401` | Non authentifi— (token manquant/invalide) |
 | `403` | Interdit (CSRF, permissions insuffisantes) |
 | `404` | Ressource introuvable |
 | `409` | Conflit (doublon unique) |
@@ -967,14 +967,14 @@ L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt co
 
 ### Exemples complets
 
-**Créer un utilisateur** :
+**Cr—er un utilisateur** :
 ```bash
 curl -X POST http://localhost:5000/users \
   -H "Content-Type: application/json" \
   -d '{"username":"bob","email":"bob@example.com","password":"SecurePass123"}'
 ```
 
-**Créer un log** :
+**Cr—er un log** :
 ```bash
 curl -X POST http://localhost:5000/logs \
   -H "Content-Type: application/json" \
@@ -1013,42 +1013,42 @@ curl "http://localhost:5000/analyses?limit=10"
 
 ### Admin (`/admin`)
 
-| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+| M—thode | Endpoint | Description | Corps de requ—te | R—ponse succ—s |
 |---------|----------|-------------|------------------|----------------|
-| `POST` | `/admin/cleanup` | Supprimer logs/analyses > N jours | `days? (défaut 90)` | `200 {logs_deleted, analyses_deleted}` |
+| `POST` | `/admin/cleanup` | Supprimer logs/analyses > N jours | `days? (d—faut 90)` | `200 {logs_deleted, analyses_deleted}` |
 | `POST` | `/admin/alerts` | Envoyer email alerte critique | `AlertPayload` | `200 {status: "sent"}` |
 
-> **Note** : Routes protégées par `X-API-Key` (service-à-service). Voir `API_KEYS` dans `app.py`.
+> **Note** : Routes prot—g—es par `X-API-Key` (service-—-service). Voir `API_KEYS` dans `app.py`.
 
 ### Webhooks (`/webhooks`)
 
-Seul `POST /webhooks/log-created` est implémenté (reçoit notifications log créé). Les autres routes listées ci-dessous sont **non implémentées**.
+Seul `POST /webhooks/log-created` est impl—ment— (re—oit notifications log cr——). Les autres routes list—es ci-dessous sont **non impl—ment—es**.
 
-| Méthode | Endpoint | Description | Statut |
+| M—thode | Endpoint | Description | Statut |
 |---------|----------|-------------|--------|
-| `POST` | `/webhooks/log-created` | Réception événement log créé | ? Implémenté |
-| `GET` | `/webhooks` | Lister webhooks | ? Non implémenté |
-| `POST` | `/webhooks` | Créer webhook | ? Non implémenté |
-| `GET` | `/webhooks/{id}` | Récupérer webhook | ? Non implémenté |
-| `DELETE` | `/webhooks/{id}` | Supprimer webhook | ? Non implémenté |
-| `POST` | `/webhooks/{id}/test` | Tester webhook | ? Non implémenté |
+| `POST` | `/webhooks/log-created` | R—ception —v—nement log cr—— | ? Impl—ment— |
+| `GET` | `/webhooks` | Lister webhooks | ? Non impl—ment— |
+| `POST` | `/webhooks` | Cr—er webhook | ? Non impl—ment— |
+| `GET` | `/webhooks/{id}` | R—cup—rer webhook | ? Non impl—ment— |
+| `DELETE` | `/webhooks/{id}` | Supprimer webhook | ? Non impl—ment— |
+| `POST` | `/webhooks/{id}/test` | Tester webhook | ? Non impl—ment— |
 
-### Santé et Monitoring (`/health`)
+### Sant— et Monitoring (`/health`)
 
-| Méthode | Endpoint | Description | Réponse succès |
+| M—thode | Endpoint | Description | R—ponse succ—s |
 |---------|----------|-------------|----------------|
-| `GET` | `/health` | Vérifier santé API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
+| `GET` | `/health` | V—rifier sant— API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
 
-> **Note** : `/metrics` et `/metrics/summary` (Prometheus) ne sont **pas implémentés** dans cette version.
+> **Note** : `/metrics` et `/metrics/summary` (Prometheus) ne sont **pas impl—ment—s** dans cette version.
 
 ### Codes d'erreur globaux
 
 | Code | Signification |
 |------|---------------|
-| `200` | Succès (GET, PUT, DELETE) |
-| `201` | Créé (POST) |
-| `400` | Requête invalide (paramètres, validation métier) |
-| `401` | Non authentifié (token manquant/invalide) |
+| `200` | Succ—s (GET, PUT, DELETE) |
+| `201` | Cr—— (POST) |
+| `400` | Requ—te invalide (param—tres, validation m—tier) |
+| `401` | Non authentifi— (token manquant/invalide) |
 | `403` | Interdit (CSRF, permissions insuffisantes) |
 | `404` | Ressource introuvable |
 | `409` | Conflit (doublon unique) |
@@ -1060,20 +1060,20 @@ Seul `POST /webhooks/log-created` est implémenté (reçoit notifications log cr
 | `GET` | `/export/analyses` | Exporter les analyses en JSON/CSV | `format? (json/csv)`, `severity?`, `from?`, `to?` | `200` (fichier) |
 | `GET` | `/export/users` | Exporter les utilisateurs | `format? (json/csv)` | `200` (fichier) |
 
-**Export CSV  Headers de réponse :**
+**Export CSV — Headers de r—ponse :**
 ```
 Content-Disposition: attachment; filename="logs_2025-09-15.csv"
 Content-Type: text/csv; charset=utf-8
 ```
 
-**Exemple  Export logs en CSV :**
+**Exemple — Export logs en CSV :**
 ```bash
 curl -X GET http://localhost:5000/export/logs?format=csv&level=ERROR \
   -H "Authorization: Bearer <token>" \
   -o logs_export.csv
 ```
 
-**Exemple  Export analyses en JSON :**
+**Exemple — Export analyses en JSON :**
 ```bash
 curl -X GET http://localhost:5000/export/analyses?format=json&severity=HIGH \
   -H "Authorization: Bearer <token>" \
@@ -1082,11 +1082,11 @@ curl -X GET http://localhost:5000/export/analyses?format=json&severity=HIGH \
 
 ### Rapport (`/report`)
 
-| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+| M—thode | Endpoint | Description | Corps de requ—te | R—ponse succ—s |
 |---------|----------|-------------|------------------|----------------|
-| `POST` | `/report/generate` | Générer un rapport PDF/HTML | `{type, date_from?, date_to?, format?}` | `201 {report_id, url}` |
-| `GET` | `/report/{report_id}` | Télécharger un rapport |  | `200` (fichier) |
-| `GET` | `/report/{report_id}/status` | Statut de génération |  | `200 {status, progress}` |
+| `POST` | `/report/generate` | G—n—rer un rapport PDF/HTML | `{type, date_from?, date_to?, format?}` | `201 {report_id, url}` |
+| `GET` | `/report/{report_id}` | T—l—charger un rapport | — | `200` (fichier) |
+| `GET` | `/report/{report_id}/status` | Statut de g—n—ration | — | `200 {status, progress}` |
 
 **Generate Report :**
 ```json
@@ -1094,7 +1094,7 @@ curl -X GET http://localhost:5000/export/analyses?format=json&severity=HIGH \
   "type": "security_audit | compliance | activity | custom",
   "date_from": "ISO8601 datetime (optionnel)",
   "date_to": "ISO8601 datetime (optionnel)",
-  "format": "pdf | html (défaut: pdf)",
+  "format": "pdf | html (d—faut: pdf)",
   "filters": {
     "levels": ["ERROR", "CRITICAL"],
     "sources": ["api", "postgres"],
@@ -1127,13 +1127,13 @@ curl -X POST http://localhost:5000/report/generate \
 
 ### Webhooks (`/webhooks`)
 
-| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+| M—thode | Endpoint | Description | Corps de requ—te | R—ponse succ—s |
 |---------|----------|-------------|------------------|----------------|
-| `GET` | `/webhooks` | Lister les webhooks |  | `200 [WebhookRead]` |
-| `POST` | `/webhooks` | Créer un webhook | `WebhookCreate` | `201 WebhookRead` |
-| `GET` | `/webhooks/{webhook_id}` | Récupérer un webhook |  | `200 WebhookRead` |
-| `DELETE` | `/webhooks/{webhook_id}` | Supprimer un webhook |  | `200 {id, status}` |
-| `POST` | `/webhooks/{webhook_id}/test` | Tester un webhook |  | `200 {success, http_status}` |
+| `GET` | `/webhooks` | Lister les webhooks | — | `200 [WebhookRead]` |
+| `POST` | `/webhooks` | Cr—er un webhook | `WebhookCreate` | `201 WebhookRead` |
+| `GET` | `/webhooks/{webhook_id}` | R—cup—rer un webhook | — | `200 WebhookRead` |
+| `DELETE` | `/webhooks/{webhook_id}` | Supprimer un webhook | — | `200 {id, status}` |
+| `POST` | `/webhooks/{webhook_id}/test` | Tester un webhook | — | `200 {success, http_status}` |
 
 **WebhookCreate :**
 ```json
@@ -1163,7 +1163,7 @@ curl -X POST http://localhost:5000/report/generate \
 }
 ```
 
-**Payload envoyé aux webhooks :**
+**Payload envoy— aux webhooks :**
 ```json
 {
   "event": "log.created",
@@ -1178,7 +1178,7 @@ curl -X POST http://localhost:5000/report/generate \
 }
 ```
 
-**Signature de vérification (HMAC-SHA256) :**
+**Signature de v—rification (HMAC-SHA256) :**
 ```python
 import hmac, hashlib
 signature = hmac.new(
@@ -1187,14 +1187,14 @@ signature = hmac.new(
 # Header : X-Webhook-Signature: sha256=...
 ```
 
-### Métriques (`/metrics`)
+### M—triques (`/metrics`)
 
-| Méthode | Endpoint | Description | Réponse succès |
+| M—thode | Endpoint | Description | R—ponse succ—s |
 |---------|----------|-------------|----------------|
-| `GET` | `/metrics` | Métriques Prometheus | Format Prometheus text |
-| `GET` | `/metrics/summary` | Résumé JSON des métriques clés | `200 {summary}` |
+| `GET` | `/metrics` | M—triques Prometheus | Format Prometheus text |
+| `GET` | `/metrics/summary` | R—sum— JSON des m—triques cl—s | `200 {summary}` |
 
-**Résumé JSON :**
+**R—sum— JSON :**
 ```json
 {
   "timestamp": "ISO8601 datetime",
@@ -1227,7 +1227,7 @@ signature = hmac.new(
 }
 ```
 
-**Exemple  Requête et parse Prometheus :**
+**Exemple — Requ—te et parse Prometheus :**
 ```bash
 curl -s http://localhost:5000/metrics | grep http_requests_total
 # http_requests_total{method="GET",endpoint="/logs",status="200"} 14520
@@ -1235,7 +1235,7 @@ curl -s http://localhost:5000/metrics | grep http_request_duration_seconds
 # http_request_duration_seconds{p55=0.025,p95=0.120,p99=0.350}
 ```
 
-**Exemple  Résumé des métriques :**
+**Exemple — R—sum— des m—triques :**
 ```bash
 curl -X GET http://localhost:5000/metrics/summary \
   -H "Authorization: Bearer <token>"
@@ -1248,47 +1248,47 @@ curl -X GET http://localhost:5000/metrics/summary \
 - `.github/workflows/ci.yml` : tests, build Docker, Trivy, Snyk.
 - `Dockerfile` : image non-root `appuser` (UID 1000), build reproductible.
 - `compose.yaml` : secrets Docker, `read_only`, tmpfs, limites et `cap_drop ALL` en production.
-- Le scan Trivy est exÃ©cutÃ© dans le pipeline CI, pas dans l'image de build.
+- Le scan Trivy est exécuté dans le pipeline CI, pas dans l'image de build.
 
 ---
 
-## DÃ©mo Demo Day
+## Démo Demo Day
 
-Consultez `DEMO_DAY.md` pour le support de dÃ©monstration :
+Consultez `DEMO_DAY.md` pour le support de démonstration :
 
-- DurÃ©e : **6 minutes** de dÃ©mo + Q&A.
-- RÃ©partition du temps de parole : **50/50** entre Presenter A et Presenter B.
-- Plan minute par minute avec commandes et rÃ©sultats attendus.
+- Durée : **6 minutes** de démo + Q&A.
+- Répartition du temps de parole : **50/50** entre Presenter A et Presenter B.
+- Plan minute par minute avec commandes et résultats attendus.
 - Plan de secours sans IA et sans Docker.
 
 ---
 
-## DÃ©finition of Done
+## Définition of Done
 
 - [x] Projet repart sur une machine propre avec `git clone`, `./scripts/init-docker-secrets.sh`, `docker compose up`.
-- [x] Tests automatisÃ©s passent sans accÃ¨s Ã  une vraie IA ni Ã  PostgreSQL.
-- [x] Jeu de dÃ©monstration tient en six minutes et la parole est rÃ©partie Ã  50/50.
-- [x] Code versionnÃ© et taguÃ© `v1.1.0` (depuis `v1.0.0`).
+- [x] Tests automatisés passent sans accès à une vraie IA ni à PostgreSQL.
+- [x] Jeu de démonstration tient en six minutes et la parole est répartie à 50/50.
+- [x] Code versionné et tagué `v1.1.0` (depuis `v1.0.0`).
 - [x] Documentation finale et support Demo Day fournis.
 - [x] Secrets exclus de Git et de l'image Docker.
-- [x] Fournisseurs IA validÃ©s sans rÃ©seau et avec erreurs explicites.
+- [x] Fournisseurs IA validés sans réseau et avec erreurs explicites.
 
 ---
 
-## ProblÃ¨mes courants et solutions
+## Problèmes courants et solutions
 
-| ProblÃ¨me | Cause probable | Solution |
+| Problème | Cause probable | Solution |
 |----------|---------------|----------|
 | `port 5000 already in use` | Un autre service utilise le port | `docker compose down` ou changer le port dans `compose.yaml` (ex: `5001:5000`) |
-| `/health` retourne `503` â `database: down` | PostgreSQL pas encore prÃªt ou secrets manquants | VÃ©rifier `docker compose logs db` ; attendre le healthcheck ; relancer `./scripts/init-docker-secrets.sh` |
-| `ModuleNotFoundError` | DÃ©pendances non installÃ©es | `pip install -r requirements.txt` (hors Docker) ou `docker compose up --build` |
-| `/logs/1/analyze` retourne `502` | LLM externe (OpenAI/Ollama) injoignable | VÃ©rifier `LLM_PROVIDER` : mettre `fake` pour la dÃ©mo offline. Le fallback est automatique. |
-| `pytest` Ã©choue avec `RuntimeError: DATABASE_URL` | `TESTING` non dÃ©fini en local | `TESTING=1 pytest -v` active SQLite en mÃ©moire |
-| `.env` missing / secrets introuvables | Fichier `.env` absent ou non initialisÃ© | `cp .env.production.example .env.production` puis adapter les valeurs |
-| Trivy trouve des CVE HIGH/CRITICAL | Image de base vulnÃ©rable | `docker pull python:3.11-slim` puis rebuild ; vÃ©rifier `.trivyignore` pour les exceptions justifiÃ©es |
-| Tests Ã©chouent sur une machine propre | DÃ©marrage incomplet | `git clone`, `./scripts/init-docker-secrets.sh`, `docker compose up --build -d`, puis `pytest -v` |
-| JSON invalide dans les requÃªtes curl | Guillemets ou apostrophes mal Ã©chappÃ©s | Utiliser les commandes du `demo-commands.sh` ou du fichier `DEMO_DAY.md` |
-| `docker compose` non trouvÃ© | Docker non installÃ© ou non dÃ©marrÃ© | Installer Docker Desktop ; vÃ©rifier `docker --version` et `docker compose version` |
+| `/health` retourne `503` — `database: down` | PostgreSQL pas encore prêt ou secrets manquants | Vérifier `docker compose logs db` ; attendre le healthcheck ; relancer `./scripts/init-docker-secrets.sh` |
+| `ModuleNotFoundError` | Dépendances non installées | `pip install -r requirements.txt` (hors Docker) ou `docker compose up --build` |
+| `/logs/1/analyze` retourne `502` | LLM externe (OpenAI/Ollama) injoignable | Vérifier `LLM_PROVIDER` : mettre `fake` pour la démo offline. Le fallback est automatique. |
+| `pytest` échoue avec `RuntimeError: DATABASE_URL` | `TESTING` non défini en local | `TESTING=1 pytest -v` active SQLite en mémoire |
+| `.env` missing / secrets introuvables | Fichier `.env` absent ou non initialisé | `cp .env.production.example .env.production` puis adapter les valeurs |
+| Trivy trouve des CVE HIGH/CRITICAL | Image de base vulnérable | `docker pull python:3.11-slim` puis rebuild ; vérifier `.trivyignore` pour les exceptions justifiées |
+| Tests échouent sur une machine propre | Démarrage incomplet | `git clone`, `./scripts/init-docker-secrets.sh`, `docker compose up --build -d`, puis `pytest -v` |
+| JSON invalide dans les requêtes curl | Guillemets ou apostrophes mal échappés | Utiliser les commandes du `demo-commands.sh` ou du fichier `DEMO_DAY.md` |
+| `docker compose` non trouvé | Docker non installé ou non démarré | Installer Docker Desktop ; vérifier `docker --version` et `docker compose version` |
 
 ---
 
@@ -1299,31 +1299,31 @@ Consultez `DEMO_DAY.md` pour le support de dÃ©monstration :
 docker compose logs -f web
 docker compose logs -f db
 
-# RÃ©initialiser la base SQLite de test
+# Réinitialiser la base SQLite de test
 rm -f test.sqlite test.sqlite-shm test.sqlite-wal
 pytest -v
 ```
 
 ## Rate Limiting
 
-L'API utilise un rate limiting pour protéger contre les abus :
+L'API utilise un rate limiting pour prot—ger contre les abus :
 - Authentification : 10 tentatives/minute
-- Création de logs : 50/minute
+- Cr—ation de logs : 50/minute
 - Analyse IA : 30/minute
 
 ## Changelog
 
 ### v1.1.0 (2025-09)
 - Ajout du rate limiting
-- Amélioration de la sécurité (headers, validation)
+- Am—lioration de la s—curit— (headers, validation)
 - Ajout des tests de performance
-- Documentation complète
+- Documentation compl—te
 
-## Schéma de Base de Données
+## Sch—ma de Base de Donn—es
 
-Le projet utilise **PostgreSQL 15+** en production et **SQLite en mémoire** pour les tests (`TESTING=1`). Les tables sont créées automatiquement au démarrage via `SQLAlchemy Base.metadata.create_all()`.
+Le projet utilise **PostgreSQL 15+** en production et **SQLite en m—moire** pour les tests (`TESTING=1`). Les tables sont cr——es automatiquement au d—marrage via `SQLAlchemy Base.metadata.create_all()`.
 
-### Diagramme Entité-Relation
+### Diagramme Entit—-Relation
 
 ```
 ???????????????????       ???????????????????       ???????????????????
@@ -1344,7 +1344,7 @@ Le projet utilise **PostgreSQL 15+** en production et **SQLite en mémoire** pou
    (is_active=false)       ou manuelle
 ```
 
-> **Note** : La relation `users ? logs` via `user_id` est prévue dans le modèle mais pas encore implémentée dans l'API actuelle (logs non attachés à un user). Voir roadmap v1.2.
+> **Note** : La relation `users ? logs` via `user_id` est pr—vue dans le mod—le mais pas encore impl—ment—e dans l'API actuelle (logs non attach—s — un user). Voir roadmap v1.2.
 
 ---
 
@@ -1358,17 +1358,17 @@ Stocke les comptes utilisateurs pour l'authentification et l'autorisation.
 | `username` | `VARCHAR(50)` | `NOT NULL`, `UNIQUE` | Nom d'utilisateur (3-50 chars) |
 | `email` | `VARCHAR(120)` | `NOT NULL`, `UNIQUE` | Email valide (max 120 chars) |
 | `password_hash` | `VARCHAR(256)` | `NOT NULL` | Hash bcrypt (cost 12) |
-| `role` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'reader'` | Rôle : `admin`, `writer`, `reader` |
+| `role` | `VARCHAR(20)` | `NOT NULL`, `DEFAULT 'reader'` | R—le : `admin`, `writer`, `reader` |
 | `is_active` | `BOOLEAN` | `NOT NULL`, `DEFAULT true` | Soft delete flag |
-| `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date de création UTC |
+| `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date de cr—ation UTC |
 
 **Index :**
 ```sql
--- Créés automatiquement par UNIQUE constraints
+-- Cr——s automatiquement par UNIQUE constraints
 CREATE UNIQUE INDEX ix_users_username ON users(username);
 CREATE UNIQUE INDEX ix_users_email ON users(email);
 
--- Recommandé pour requêtes fréquentes
+-- Recommand— pour requ—tes fr—quentes
 CREATE INDEX ix_users_is_active ON users(is_active);
 CREATE INDEX ix_users_created_at ON users(created_at DESC);
 ```
@@ -1388,7 +1388,7 @@ VALUES (
 
 ### Table `logs`
 
-Stocke les événements de logs ingérés (JSON, CSV, bulk).
+Stocke les —v—nements de logs ing—r—s (JSON, CSV, bulk).
 
 | Colonne | Type | Contraintes | Description |
 |---------|------|-------------|-------------|
@@ -1396,28 +1396,28 @@ Stocke les événements de logs ingérés (JSON, CSV, bulk).
 | `level` | `VARCHAR(20)` | `NOT NULL` | Niveau : `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `message` | `TEXT` | `NOT NULL` | Contenu du log (max 4096 chars) |
 | `source` | `VARCHAR(100)` | `DEFAULT 'unknown'` | Source/origine du log |
-| `log_metadata` | `JSONB` | `NULLABLE` | Métadonnées additionnelles (extensible) |
+| `log_metadata` | `JSONB` | `NULLABLE` | M—tadonn—es additionnelles (extensible) |
 | `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date d'ingestion UTC |
 
 **Index :**
 ```sql
--- Index pour filtres fréquents (GET /logs?level=...&source=...)
+-- Index pour filtres fr—quents (GET /logs?level=...&source=...)
 CREATE INDEX ix_logs_level ON logs(level);
 CREATE INDEX ix_logs_source ON logs(source);
 CREATE INDEX ix_logs_created_at ON logs(created_at DESC);
 
--- Index composite pour filtres combinés
+-- Index composite pour filtres combin—s
 CREATE INDEX ix_logs_level_created_at ON logs(level, created_at DESC);
 CREATE INDEX ix_logs_source_created_at ON logs(source, created_at DESC);
 
--- Index GIN pour recherche JSONB (si log_metadata utilisé)
+-- Index GIN pour recherche JSONB (si log_metadata utilis—)
 CREATE INDEX ix_logs_metadata_gin ON logs USING GIN (log_metadata);
 ```
 
-**Contraintes de validation (appliquées par Pydantic avant INSERT) :**
+**Contraintes de validation (appliqu—es par Pydantic avant INSERT) :**
 - `level` ? `{DEBUG, INFO, WARNING, ERROR, CRITICAL}`
-- `message` : 1-4096 caractères, non vide
-- `source` : 1-100 caractères, non vide
+- `message` : 1-4096 caract—res, non vide
+- `source` : 1-100 caract—res, non vide
 
 **Exemple d'insertion :**
 ```sql
@@ -1434,15 +1434,15 @@ VALUES (
 
 ### Table `analyses`
 
-Stocke les résultats d'analyse des logs (via LLM ou manuelles).
+Stocke les r—sultats d'analyse des logs (via LLM ou manuelles).
 
 | Colonne | Type | Contraintes | Description |
 |---------|------|-------------|-------------|
 | `id` | `INTEGER` | `PRIMARY KEY`, `AUTOINCREMENT` | Identifiant unique |
 | `log_id` | `INTEGER` | `NOT NULL`, `REFERENCES logs(id)` | FK vers table logs |
 | `type` | `VARCHAR(50)` | `NOT NULL`, `DEFAULT 'log_analysis'` | Type d'analyse |
-| `input_data` | `TEXT` | `NULLABLE` | Log message analysé (copie) |
-| `result` | `TEXT` | `NULLABLE` | Résultat JSON (AnalysisResult schema) |
+| `input_data` | `TEXT` | `NULLABLE` | Log message analys— (copie) |
+| `result` | `TEXT` | `NULLABLE` | R—sultat JSON (AnalysisResult schema) |
 | `created_at` | `TIMESTAMP` | `NOT NULL`, `DEFAULT now()` | Date d'analyse UTC |
 
 **Index :**
@@ -1453,16 +1453,16 @@ CREATE INDEX ix_analyses_log_id ON analyses(log_id);
 -- Tri par date (GET /analyses ORDER BY created_at DESC)
 CREATE INDEX ix_analyses_created_at ON analyses(created_at DESC);
 
--- Index composite pour requêtes "analyses récentes d'un log"
+-- Index composite pour requ—tes "analyses r—centes d'un log"
 CREATE INDEX ix_analyses_log_id_created_at ON analyses(log_id, created_at DESC);
 ```
 
-**Schéma `result` (JSON stocké dans `TEXT`) :**
+**Sch—ma `result` (JSON stock— dans `TEXT`) :**
 ```json
 {
   "severity": "LOW|MEDIUM|HIGH|CRITICAL",
   "category": "AUTH|NETWORK|SYSTEM|APPLICATION|DATABASE|SECURITY",
-  "summary": "Brève description de l'incident",
+  "summary": "Br—ve description de l'incident",
   "recommendations": [
     "Action corrective 1",
     "Action corrective 2"
@@ -1478,43 +1478,43 @@ VALUES (
   42,
   'log_analysis',
   'Database connection pool exhausted',
-  '{"severity":"HIGH","category":"DATABASE","summary":"Pool épuisé","recommendations":["Augmenter pool_size","Optimiser requêtes"],"provider":"fake"}'
+  '{"severity":"HIGH","category":"DATABASE","summary":"Pool —puis—","recommendations":["Augmenter pool_size","Optimiser requ—tes"],"provider":"fake"}'
 );
 ```
 
 ---
 
-### Relations et Intégrité Référentielle
+### Relations et Int—grit— R—f—rentielle
 
 ```sql
 -- Relation analyses ? logs (1 log = N analyses)
 ALTER TABLE analyses
 ADD CONSTRAINT fk_analyses_log_id
 FOREIGN KEY (log_id) REFERENCES logs(id)
-ON DELETE CASCADE;  -- Si log supprimé, analyses associées supprimées
+ON DELETE CASCADE;  -- Si log supprim—, analyses associ—es supprim—es
 ```
 
-> **Note** : `ON DELETE CASCADE` assure la cohérence. La suppression d'un log (soft ou hard) entraîne la suppression de ses analyses.
+> **Note** : `ON DELETE CASCADE` assure la coh—rence. La suppression d'un log (soft ou hard) entra—ne la suppression de ses analyses.
 
 ---
 
-### Migrations et Évolutions
+### Migrations et —volutions
 
-Le projet n'utilise pas encore d'outil de migration formel (Alembic). Les changements de schéma sont gérés par :
+Le projet n'utilise pas encore d'outil de migration formel (Alembic). Les changements de sch—ma sont g—r—s par :
 
-1. **Modification des modèles SQLAlchemy** dans `app.py`
-2. **Redémarrage de l'app** ? `Base.metadata.create_all()` crée tables manquantes
+1. **Modification des mod—les SQLAlchemy** dans `app.py`
+2. **Red—marrage de l'app** ? `Base.metadata.create_all()` cr—e tables manquantes
 3. **Migrations manuelles** pour changements destructifs (ALTER TABLE, DROP COLUMN)
 
 #### Roadmap Migrations (v1.2+)
 - [ ] Ajouter `user_id` FK sur `logs` (authorship)
-- [ ] Ajouter `alerts` table pour seuils de sévérité
+- [ ] Ajouter `alerts` table pour seuils de s—v—rit—
 - [ ] Partitionner `logs` par mois (pg_partman)
 - [ ] Ajouter `full-text search` via `tsvector` + GIN index
 
 ---
 
-### Requêtes Utiles pour Administration
+### Requ—tes Utiles pour Administration
 
 ```sql
 -- Statistiques globales
@@ -1524,7 +1524,7 @@ SELECT
   (SELECT count(*) FROM analyses) as total_analyses,
   (SELECT count(*) FROM analyses WHERE result::jsonb->>'severity' IN ('HIGH','CRITICAL')) as critical_alerts;
 
--- Logs par niveau (dernières 24h)
+-- Logs par niveau (derni—res 24h)
 SELECT level, count(*)
 FROM logs
 WHERE created_at > now() - interval '24 hours'
@@ -1567,13 +1567,13 @@ ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
 ### Sauvegarde et Restauration
 
 ```bash
-# Backup complet (structure + données)
+# Backup complet (structure + donn—es)
 docker compose exec db pg_dump -U log_sentinel -d log_sentinel > backup_full_$(date +%F).sql
 
-# Backup données seulement (pour restauration sur schéma existant)
+# Backup donn—es seulement (pour restauration sur sch—ma existant)
 docker compose exec db pg_dump -U log_sentinel -d log_sentinel --data-only > backup_data_$(date +%F).sql
 
-# Backup table spécifique
+# Backup table sp—cifique
 docker compose exec db pg_dump -U log_sentinel -d log_sentinel -t logs > backup_logs_$(date +%F).sql
 
 # Restauration
@@ -1586,13 +1586,13 @@ docker compose exec -T db psql -U log_sentinel -d log_sentinel < backup_logs_202
 
 ---
 
-### Configuration PostgreSQL Recommandée (Production)
+### Configuration PostgreSQL Recommand—e (Production)
 
 ```postgresql
 # postgresql.conf (via Docker config ou volume)
 shared_buffers = 256MB                    # 25% RAM
 effective_cache_size = 1GB                # 75% RAM
-work_mem = 16MB                           # Par opération tri/hash
+work_mem = 16MB                           # Par op—ration tri/hash
 maintenance_work_mem = 256MB              # VACUUM, CREATE INDEX
 max_connections = 100                     # Selon pool taille
 random_page_cost = 1.1                    # SSD
@@ -1605,7 +1605,7 @@ min_wal_size = 1GB
 
 ---
 
-### Vues Métier
+### Vues M—tier
 
 #### Statistiques Globales (Dashboard)
 
@@ -1652,10 +1652,10 @@ WHERE a.id IS NULL
 ORDER BY l.created_at DESC;
 ```
 
-### Automatisation de la Rétention des Données
+### Automatisation de la R—tention des Donn—es
 
 ```sql
--- Function: supprimer les données expirées
+-- Function: supprimer les donn—es expir—es
 CREATE OR REPLACE FUNCTION purge_old_data()
 RETURNS void AS $$
 BEGIN
@@ -1669,25 +1669,25 @@ BEGIN
   DELETE FROM logs
   WHERE created_at < now() - interval '90 days';
 
-  -- Les utilisateurs sont conservés 365 jours (conforme RGPD)
+  -- Les utilisateurs sont conserv—s 365 jours (conforme RGPD)
   DELETE FROM users
   WHERE is_active = true
     AND created_at < now() - interval '365 days';
 
-  RAISE NOTICE 'Purge terminée : %, %, % rows',
+  RAISE NOTICE 'Purge termin—e : %, %, % rows',
     (SELECT count(*) FROM logs WHERE created_at < now() - interval '90 days'),
     (SELECT count(*) FROM analyses WHERE log_id NOT IN (SELECT id FROM logs WHERE created_at > now() - interval '90 days')),
     (SELECT count(*) FROM users WHERE is_active = true AND created_at < now() - interval '365 days');
 END;
 $$ LANGUAGE plpgsql;
 
--- Job pg_cron pour exécution quotidienne (si pg_cron installé)
+-- Job pg_cron pour ex—cution quotidienne (si pg_cron install—)
 SELECT cron.schedule('purge-old-data', '0 3 * * *', 'SELECT purge_old_data()');
 ```
 
-### Procédures de Maintenance
+### Proc—dures de Maintenance
 
-#### Reindex et VACUUM Programmé
+#### Reindex et VACUUM Programm—
 
 ```sql
 -- Function: maintenance hebdomadaire
@@ -1699,23 +1699,23 @@ BEGIN
   VACUUM ANALYZE analyses;
   VACUUM ANALYZE users;
 
-  -- Reindex des index les plus utilisés
+  -- Reindex des index les plus utilis—s
   REINDEX INDEX ix_logs_level_created_at;
   REINDEX INDEX ix_logs_source_created_at;
   REINDEX INDEX ix_analyses_log_id_created_at;
 
-  RAISE NOTICE 'Maintenance hebdomadaire terminée';
+  RAISE NOTICE 'Maintenance hebdomadaire termin—e';
 END;
 $$ LANGUAGE plpgsql;
 
--- Schedule : chaque dimanche à 2h du matin
+-- Schedule : chaque dimanche — 2h du matin
 SELECT cron.schedule('weekly-maintenance', '0 2 * * 0', 'SELECT weekly_maintenance()');
 ```
 
-### Monitoring de l'Intégrité de la Base
+### Monitoring de l'Int—grit— de la Base
 
 ```sql
--- Vérification de l'intégrité des tables
+-- V—rification de l'int—grit— des tables
 SELECT
   schemaname,
   tablename,
@@ -1732,7 +1732,7 @@ JOIN pg_class ON pg_class.relname = pg_stat_user_tables.relname
 WHERE schemaname = 'public'
 ORDER BY pg_relation_size(schemaname || '.' || tablename) DESC;
 
--- Vérifier les tables sans index
+-- V—rifier les tables sans index
 SELECT
   t.relname as table_name,
   c.relname as index_name,
@@ -1750,19 +1750,19 @@ ORDER BY t.relname;
 
 ---
 
-## Schéma de base de données  référence d'implémentation
+## Sch—ma de base de donn—es — r—f—rence d'impl—mentation
 
-Cette section décrit le schéma **actuellement implémenté** dans `app.py`. Elle fait autorité pour les opérations courantes ; les champs et relations présentés ailleurs comme évolutions futures ne doivent pas être supposés présents en base.
+Cette section d—crit le sch—ma **actuellement impl—ment—** dans `app.py`. Elle fait autorit— pour les op—rations courantes ; les champs et relations pr—sent—s ailleurs comme —volutions futures ne doivent pas —tre suppos—s pr—sents en base.
 
 ### Moteurs et initialisation
 
 | Environnement | Moteur | Initialisation |
 |---------------|--------|----------------|
-| Production | PostgreSQL 15+ via `DATABASE_URL` ou `DB_USER`/`DB_PASSWORD` | `Base.metadata.create_all()` au démarrage |
-| Tests | SQLite en mémoire avec `TESTING=1` | `Base.metadata.create_all()` puis `drop_all()` dans les fixtures |
-| Développement Docker | PostgreSQL 15, base `music_hall` | script d'initialisation monté dans `compose.yaml` |
+| Production | PostgreSQL 15+ via `DATABASE_URL` ou `DB_USER`/`DB_PASSWORD` | `Base.metadata.create_all()` au d—marrage |
+| Tests | SQLite en m—moire avec `TESTING=1` | `Base.metadata.create_all()` puis `drop_all()` dans les fixtures |
+| D—veloppement Docker | PostgreSQL 15, base `music_hall` | script d'initialisation mont— dans `compose.yaml` |
 
-`create_all()` crée les tables absentes, mais n'altère pas les colonnes existantes. Un changement de type, de contrainte ou de nom de colonne nécessite donc une migration explicite et une sauvegarde préalable.
+`create_all()` cr—e les tables absentes, mais n'alt—re pas les colonnes existantes. Un changement de type, de contrainte ou de nom de colonne n—cessite donc une migration explicite et une sauvegarde pr—alable.
 
 ### Diagramme logique actuel
 
@@ -1789,37 +1789,37 @@ Cette section décrit le schéma **actuellement implémenté** dans `app.py`. El
 +---------------------------+
 ```
 
-Aucune clé étrangère ni relation SQLAlchemy n'est actuellement déclarée entre ces trois tables. Le champ `log_id` renvoyé par `POST /logs/{log_id}/analyze` est une valeur de réponse ; il n'est pas persisté dans `analyses`.
+Aucune cl— —trang—re ni relation SQLAlchemy n'est actuellement d—clar—e entre ces trois tables. Le champ `log_id` renvoy— par `POST /logs/{log_id}/analyze` est une valeur de r—ponse ; il n'est pas persist— dans `analyses`.
 
 ### Table `users`
 
-| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par d—faut | Usage |
 |---------|-----------------|----------|--------------------------------|-------|
-| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant interne |
+| `id` | `Integer` | Non | cl— primaire, auto-incr—ment—e | identifiant interne |
 | `username` | `String(50)` | Non | index unique | connexion et affichage |
-| `email` | `String(120)` | Non | index unique | récupération et contact |
-| `password_hash` | `String(256)` | Non | bcrypt, coût 12 | authentification ; aucun mot de passe clair |
-| `is_active` | `Boolean` | Oui | `True` | désactivation logique des comptes |
-| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de création |
+| `email` | `String(120)` | Non | index unique | r—cup—ration et contact |
+| `password_hash` | `String(256)` | Non | bcrypt, co—t 12 | authentification ; aucun mot de passe clair |
+| `is_active` | `Boolean` | Oui | `True` | d—sactivation logique des comptes |
+| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de cr—ation |
 
-Indexes déclarés :
+Indexes d—clar—s :
 
-- `ix_users_username` : unicité de `username`.
-- `ix_users_email` : unicité de `email`.
+- `ix_users_username` : unicit— de `username`.
+- `ix_users_email` : unicit— de `email`.
 
-La création d'un utilisateur est validée par `UserCreate` : nom de 3 à 50 caractères, email valide et mot de passe d'au moins 8 caractères. La suppression par l'API positionne `is_active` à `False` ; elle ne supprime pas la ligne.
+La cr—ation d'un utilisateur est valid—e par `UserCreate` : nom de 3 — 50 caract—res, email valide et mot de passe d'au moins 8 caract—res. La suppression par l'API positionne `is_active` — `False` ; elle ne supprime pas la ligne.
 
 ### Table `logs`
 
-| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par d—faut | Usage |
 |---------|-----------------|----------|--------------------------------|-------|
-| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant du log |
-| `level` | `String(20)` | Non |  | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
-| `message` | `Text` | Non | longueur applicative maximale : 4096 | contenu ingéré |
-| `source` | `String(100)` | Oui | valeur applicative par défaut : `unknown` | origine du log |
+| `id` | `Integer` | Non | cl— primaire, auto-incr—ment—e | identifiant du log |
+| `level` | `String(20)` | Non | — | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `message` | `Text` | Non | longueur applicative maximale : 4096 | contenu ing—r— |
+| `source` | `String(100)` | Oui | valeur applicative par d—faut : `unknown` | origine du log |
 | `created_at` | `DateTime` | Oui | `datetime.utcnow` | date d'ingestion |
 
-Indexes déclarés :
+Indexes d—clar—s :
 
 - `ix_logs_level`
 - `ix_logs_source`
@@ -1828,29 +1828,29 @@ Indexes déclarés :
 - `ix_logs_source_created_at`
 - `ix_logs_level_source_created_at`
 
-Les validations de niveau, de longueur et de source sont appliquées avant insertion par Pydantic et par les endpoints bulk/CSV. Le modèle ne contient pas de colonne `log_metadata` ni de colonne `user_id` dans l'implémentation actuelle.
+Les validations de niveau, de longueur et de source sont appliqu—es avant insertion par Pydantic et par les endpoints bulk/CSV. Le mod—le ne contient pas de colonne `log_metadata` ni de colonne `user_id` dans l'impl—mentation actuelle.
 
 ### Table `analyses`
 
-| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par défaut | Usage |
+| Colonne | Type SQLAlchemy | Nullable | Contrainte / valeur par d—faut | Usage |
 |---------|-----------------|----------|--------------------------------|-------|
-| `id` | `Integer` | Non | clé primaire, auto-incrémentée | identifiant de l'analyse |
-| `type` | `String(50)` | Non |  | type d'analyse, par exemple `log_analysis` |
-| `input_data` | `Text` | Oui |  | donnée d'entrée conservée |
-| `result` | `Text` | Oui |  | résultat JSON sérialisé du provider |
-| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de création |
+| `id` | `Integer` | Non | cl— primaire, auto-incr—ment—e | identifiant de l'analyse |
+| `type` | `String(50)` | Non | — | type d'analyse, par exemple `log_analysis` |
+| `input_data` | `Text` | Oui | — | donn—e d'entr—e conserv—e |
+| `result` | `Text` | Oui | — | r—sultat JSON s—rialis— du provider |
+| `created_at` | `DateTime` | Oui | `datetime.utcnow` | date de cr—ation |
 
-`POST /logs/{log_id}/analyze` vérifie d'abord que le log existe, appelle le provider, puis insère une ligne dans `analyses`. La réponse contient `log_id`, mais la table ne possède pas de colonne correspondante. `POST /analyses` accepte un objet contenant au moins `type` et conserve éventuellement `input_data` et `result`.
+`POST /logs/{log_id}/analyze` v—rifie d'abord que le log existe, appelle le provider, puis ins—re une ligne dans `analyses`. La r—ponse contient `log_id`, mais la table ne poss—de pas de colonne correspondante. `POST /analyses` accepte un objet contenant au moins `type` et conserve —ventuellement `input_data` et `result`.
 
-Le contenu de `result` suit le contrat `AnalysisResult` : `severity`, `category`, `summary`, `recommendations` et `provider`. Il doit être traité comme du JSON stocké dans du texte, et non comme une colonne JSON typée.
+Le contenu de `result` suit le contrat `AnalysisResult` : `severity`, `category`, `summary`, `recommendations` et `provider`. Il doit —tre trait— comme du JSON stock— dans du texte, et non comme une colonne JSON typ—e.
 
-### Relations, requêtes et rétention
+### Relations, requ—tes et r—tention
 
-- La relation `logs` ? `analyses` est **logique et applicative**, pas référentielle en base.
-- Les utilisateurs et les logs sont indépendants ; aucune attribution d'auteur n'est persistée.
-- Les listes sont triées par `created_at DESC` dans les endpoints de lecture.
-- `CleanupService` supprime les logs et analyses antérieurs à un seuil configurable, par défaut 90 jours. Les utilisateurs ne sont pas supprimés automatiquement par ce service.
-- Les exports et rapports lisent les tables via SQLAlchemy ; ils ne doivent pas contourner les validations d'entrée de l'API.
+- La relation `logs` ? `analyses` est **logique et applicative**, pas r—f—rentielle en base.
+- Les utilisateurs et les logs sont ind—pendants ; aucune attribution d'auteur n'est persist—e.
+- Les listes sont tri—es par `created_at DESC` dans les endpoints de lecture.
+- `CleanupService` supprime les logs et analyses ant—rieurs — un seuil configurable, par d—faut 90 jours. Les utilisateurs ne sont pas supprim—s automatiquement par ce service.
+- Les exports et rapports lisent les tables via SQLAlchemy ; ils ne doivent pas contourner les validations d'entr—e de l'API.
 
 Exemples d'inspection :
 
@@ -1860,38 +1860,38 @@ docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall 
 docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c "\\d+ logs"
 docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c "\\d+ analyses"
 
-# Volumes et cardinalités
+# Volumes et cardinalit—s
 docker compose exec db psql -U "$(cat secrets/postgres_user.txt)" -d music_hall -c \
   "SELECT 'users' AS table_name, count(*) FROM users
    UNION ALL SELECT 'logs', count(*) FROM logs
    UNION ALL SELECT 'analyses', count(*) FROM analyses;"
 ```
 
-### Évolution du schéma
+### —volution du sch—ma
 
 Pour toute modification :
 
-1. Sauvegarder la base et valider la restauration dans un environnement isolé.
-2. Ajouter ou modifier les modèles SQLAlchemy et les schémas Pydantic associés.
-3. Écrire une migration PostgreSQL explicite pour les changements destructifs ou incompatibles.
-4. Mettre à jour les tests d'intégration, les exports, les requêtes d'administration et la présente référence.
-5. Déployer la migration avant la version applicative qui dépend de la nouvelle colonne.
-6. Vérifier les indexes, les contraintes, les performances et la rétention après déploiement.
+1. Sauvegarder la base et valider la restauration dans un environnement isol—.
+2. Ajouter ou modifier les mod—les SQLAlchemy et les sch—mas Pydantic associ—s.
+3. —crire une migration PostgreSQL explicite pour les changements destructifs ou incompatibles.
+4. Mettre — jour les tests d'int—gration, les exports, les requ—tes d'administration et la pr—sente r—f—rence.
+5. D—ployer la migration avant la version applicative qui d—pend de la nouvelle colonne.
+6. V—rifier les indexes, les contraintes, les performances et la r—tention apr—s d—ploiement.
 
-Évolutions à ne pas considérer comme disponibles aujourd'hui : `role` sur `users`, `log_metadata` sur `logs`, `user_id` sur `logs`, clé étrangère `analyses.log_id`, partitionnement mensuel et recherche full-text.
+—volutions — ne pas consid—rer comme disponibles aujourd'hui : `role` sur `users`, `log_metadata` sur `logs`, `user_id` sur `logs`, cl— —trang—re `analyses.log_id`, partitionnement mensuel et recherche full-text.
 
 ---
 
 ## Contribuer
 
 ### Avant de committer
-1. Exécuter les tests : `pytest tests/ -v`
-2. Vérifier le linting : `ruff check .`
-3. Vérifier les types : `mypy app.py`
+1. Ex—cuter les tests : `pytest tests/ -v`
+2. V—rifier le linting : `ruff check .`
+3. V—rifier les types : `mypy app.py`
 4. Ne jamais commit de secrets
 
 ### Style des commits
-- `feat` : Nouvelle fonctionnalité
+- `feat` : Nouvelle fonctionnalit—
 - `fix` : Correction de bug
 - `docs` : Documentation
 - `test` : Tests
@@ -1902,13 +1902,13 @@ Pour toute modification :
 
 L'API utilise le versioning par URL :
 - `/api/v1/` : Version actuelle
-- `/api/v2/` : Version future (développement)
+- `/api/v2/` : Version future (d—veloppement)
 
-La version est indiquée dans le schéma OpenAPI.
+La version est indiqu—e dans le sch—ma OpenAPI.
 
-## Observabilité et monitoring
+## Observabilit— et monitoring
 
-Cette stack est optionnelle en développement et recommandée en production. Elle sépare les signaux sans centraliser les secrets ou les logs sensibles dans les tableaux de bord.
+Cette stack est optionnelle en d—veloppement et recommand—e en production. Elle s—pare les signaux sans centraliser les secrets ou les logs sensibles dans les tableaux de bord.
 
 ```text
 Client / healthcheck
@@ -1916,40 +1916,40 @@ Client / healthcheck
         v
 +----------------+       +----------------+       +----------------+
 | Prometheus     |<------| API FastAPI    |------>| Loki           |
-| métriques      |       | /metrics       |       | logs structurés|
+| m—triques      |       | /metrics       |       | logs structur—s|
 +-------+--------+       +----------------+       +-------+--------+
         |                                               |
         v                                               v
 +----------------+       +----------------+       +----------------+
 | Grafana        |<------| Jaeger         |<------| traces OpenTelemetry |
-| dashboards     |       | UI / stockage  |       | (quand activé)    |
+| dashboards     |       | UI / stockage  |       | (quand activ—)    |
 +----------------+       +----------------+       +----------------+
 ```
 
-### Prérequis et ports
+### Pr—requis et ports
 
 - Docker Engine et Docker Compose v2.
-- L'API doit être joignable sur le réseau Docker et exposer `/health` et `/metrics`.
-- Les ports ci-dessous sont des ports locaux de consultation ; en production, publiez uniquement Grafana et Jaeger derrière un reverse proxy authentifié.
+- L'API doit —tre joignable sur le r—seau Docker et exposer `/health` et `/metrics`.
+- Les ports ci-dessous sont des ports locaux de consultation ; en production, publiez uniquement Grafana et Jaeger derri—re un reverse proxy authentifi—.
 
 | Composant | Port local | Usage |
 |-----------|------------|-------|
 | API | `5000` | `/health`, `/metrics` |
-| Prometheus | `9090` | collecte et requêtes PromQL |
+| Prometheus | `9090` | collecte et requ—tes PromQL |
 | Grafana | `3000` | dashboards et alertes |
-| Loki | `3100` | requêtes LogQL |
+| Loki | `3100` | requ—tes LogQL |
 | Jaeger | `16686` | recherche de traces |
-| Jaeger OTLP/UDP | `4317`, `6831` | réception des traces |
+| Jaeger OTLP/UDP | `4317`, `6831` | r—ception des traces |
 
 ### Lancer la stack locale
 
-Les commandes suivantes utilisent des conteneurs autonomes afin de rester indépendantes du fichier Compose de l'application. Adaptez les versions et le réseau à votre environnement.
+Les commandes suivantes utilisent des conteneurs autonomes afin de rester ind—pendantes du fichier Compose de l'application. Adaptez les versions et le r—seau — votre environnement.
 
 ```bash
-# Réseau partagé avec le service web de Log Sentinel API
+# R—seau partag— avec le service web de Log Sentinel API
 docker network create log-sentinel-observability 2>/dev/null || true
 
-# Prometheus (le fichier de configuration est décrit ci-dessous)
+# Prometheus (le fichier de configuration est d—crit ci-dessous)
 docker run -d --name log-sentinel-prometheus \
   --network log-sentinel-observability \
   -p 9090:9090 \
@@ -1971,7 +1971,7 @@ docker run -d --name log-sentinel-jaeger \
   -p 6831:6831/udp \
   jaegertracing/all-in-one:1.53.0
 
-# Grafana (mot de passe à changer avant toute exposition réseau)
+# Grafana (mot de passe — changer avant toute exposition r—seau)
 docker run -d --name log-sentinel-grafana \
   --network log-sentinel-observability \
   -p 3000:3000 \
@@ -1980,7 +1980,7 @@ docker run -d --name log-sentinel-grafana \
   grafana/grafana:10.2.2
 ```
 
-Pour une stack Compose, ajoutez les services à un fichier d'overlay dédié et lancez :
+Pour une stack Compose, ajoutez les services — un fichier d'overlay d—di— et lancez :
 
 ```bash
 docker compose -f compose.yaml -f docker-compose.observability.yml up -d
@@ -1989,7 +1989,7 @@ docker compose -f compose.yaml -f docker-compose.observability.yml ps
 
 ### Configuration Prometheus
 
-Créez `config/prometheus.yml` avec une cible correspondant au nom de service de l'API. Avec `compose.yaml`, la cible est généralement `web:5000` ; avec les conteneurs autonomes, connectez le service API au réseau ou utilisez `host.docker.internal:5000` selon la plateforme.
+Cr—ez `config/prometheus.yml` avec une cible correspondant au nom de service de l'API. Avec `compose.yaml`, la cible est g—n—ralement `web:5000` ; avec les conteneurs autonomes, connectez le service API au r—seau ou utilisez `host.docker.internal:5000` selon la plateforme.
 
 ```yaml
 global:
@@ -2003,7 +2003,7 @@ scrape_configs:
       - targets: ["web:5000"]
 ```
 
-Vérifiez la collecte :
+V—rifiez la collecte :
 
 ```bash
 curl -fsS http://localhost:9090/-/ready
@@ -2012,7 +2012,7 @@ curl -fsS http://localhost:5000/health
 curl -fsS http://localhost:5000/metrics
 ```
 
-Si `/metrics` répond `404`, vérifiez que l'image déployée active l'instrumentation Prometheus ; `/health` reste le contrôle de disponibilité minimal.
+Si `/metrics` r—pond `404`, v—rifiez que l'image d—ploy—e active l'instrumentation Prometheus ; `/health` reste le contr—le de disponibilit— minimal.
 
 ### Configuration Grafana
 
@@ -2020,19 +2020,19 @@ Si `/metrics` répond `404`, vérifiez que l'image déployée active l'instrumen
 2. Ajoutez Prometheus : **Connections ? Data sources ? Prometheus**, URL `http://log-sentinel-prometheus:9090`.
 3. Ajoutez Loki : URL `http://log-sentinel-loki:3100`.
 4. Ajoutez Jaeger : URL `http://log-sentinel-jaeger:16686`.
-5. Importez les dashboards décrits ci-dessous ou utilisez l'import JSON de Grafana.
+5. Importez les dashboards d—crits ci-dessous ou utilisez l'import JSON de Grafana.
 
-Dashboards recommandés :
+Dashboards recommand—s :
 
-| Dashboard | Panneaux minimum | Requêtes / sources |
+| Dashboard | Panneaux minimum | Requ—tes / sources |
 |-----------|------------------|--------------------|
-| **Log Sentinel API  Vue générale** | requêtes/s, taux d'erreur, p50/p95/p99, santé DB, logs ingérés, analyses produites | `rate(http_requests_total[5m])`, `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))`, `/metrics` |
-| **Ingestion et qualité des logs** | volume par niveau et source, rejets bulk/CSV, taille des payloads, logs sans analyse | labels `level`, `source`, `status`, `endpoint` ; Loki + Prometheus |
-| **Sécurité et limites** | 401/403/429, tentatives par IP, rate-limit, événements de redaction, accès admin | `rate(http_requests_total{status=~"401|403|429"}[5m])`, LogQL sur les logs d'audit |
-| **Base de données** | connexions actives/idle, requêtes lentes, taille des tables, échecs healthcheck | métriques PostgreSQL/exporter et `/health` |
-| **Traces et providers LLM** | durée par route, traces par provider, erreurs/timeout, fallback fake | Jaeger service `log-sentinel-api`, spans `db`, `llm`, `http` |
+| **Log Sentinel API — Vue g—n—rale** | requ—tes/s, taux d'erreur, p50/p95/p99, sant— DB, logs ing—r—s, analyses produites | `rate(http_requests_total[5m])`, `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))`, `/metrics` |
+| **Ingestion et qualit— des logs** | volume par niveau et source, rejets bulk/CSV, taille des payloads, logs sans analyse | labels `level`, `source`, `status`, `endpoint` ; Loki + Prometheus |
+| **S—curit— et limites** | 401/403/429, tentatives par IP, rate-limit, —v—nements de redaction, acc—s admin | `rate(http_requests_total{status=~"401|403|429"}[5m])`, LogQL sur les logs d'audit |
+| **Base de donn—es** | connexions actives/idle, requ—tes lentes, taille des tables, —checs healthcheck | m—triques PostgreSQL/exporter et `/health` |
+| **Traces et providers LLM** | dur—e par route, traces par provider, erreurs/timeout, fallback fake | Jaeger service `log-sentinel-api`, spans `db`, `llm`, `http` |
 
-Exemples de requêtes PromQL à copier dans Grafana :
+Exemples de requ—tes PromQL — copier dans Grafana :
 
 ```promql
 # Taux d'erreurs HTTP sur 5 minutes
@@ -2046,10 +2046,10 @@ histogram_quantile(
   sum by (le, endpoint) (rate(http_request_duration_seconds_bucket[5m]))
 )
 
-# Requêtes par minute et statut
+# Requ—tes par minute et statut
 sum by (status) (rate(http_requests_total[5m])) * 60
 
-# Logs ingérés et analyses créées
+# Logs ing—r—s et analyses cr——es
 rate(log_sentinel_logs_created_total[5m])
 rate(log_sentinel_analyses_created_total[5m])
 
@@ -2059,7 +2059,7 @@ sum by (provider) (rate(llm_provider_errors_total[5m]))
 
 ### Logs avec Loki
 
-L'application doit émettre des logs structurés JSON avec, au minimum, `timestamp`, `level`, `message`, `request_id`, `route`, `source` et `duration_ms`. Les champs contenant des credentials, tokens, clés API ou données personnelles doivent être redactés avant l'envoi.
+L'application doit —mettre des logs structur—s JSON avec, au minimum, `timestamp`, `level`, `message`, `request_id`, `route`, `source` et `duration_ms`. Les champs contenant des credentials, tokens, cl—s API ou donn—es personnelles doivent —tre redact—s avant l'envoi.
 
 Exemples LogQL :
 
@@ -2067,13 +2067,13 @@ Exemples LogQL :
 # Tous les logs de l'API
 {job="log-sentinel-api"}
 
-# Erreurs et critiques des 15 dernières minutes
+# Erreurs et critiques des 15 derni—res minutes
 {job="log-sentinel-api"} |= "ERROR" | duration_ms > 500
 
 # Requets avec un request_id connu
 {job="log-sentinel-api"} |= "request_id" | line_format "{{.request_id}} {{.message}}"
 
-# Recherche d'une éventuelle donnée sensible (à traiter comme alerte, pas comme affichage)
+# Recherche d'une —ventuelle donn—e sensible (— traiter comme alerte, pas comme affichage)
 {job="log-sentinel-api"} |~ "(?i)(password|token|api[_-]?key|authorization)"
 ```
 
@@ -2081,19 +2081,19 @@ Pour acheminer les logs Docker vers Loki, utilisez Promtail ou Alloy avec un job
 
 ### Traces avec Jaeger
 
-Lorsque l'instrumentation OpenTelemetry est activée, configurez l'exporteur vers `log-sentinel-jaeger:4317` (OTLP) ou `log-sentinel-jaeger:6831` (Jaeger Thrift UDP) et utilisez le nom de service `log-sentinel-api`. Propagez le `request_id` en en-tête et ajoutez des spans pour :
+Lorsque l'instrumentation OpenTelemetry est activ—e, configurez l'exporteur vers `log-sentinel-jaeger:4317` (OTLP) ou `log-sentinel-jaeger:6831` (Jaeger Thrift UDP) et utilisez le nom de service `log-sentinel-api`. Propagez le `request_id` en en-t—te et ajoutez des spans pour :
 
-- la réception HTTP et le code de statut ;
-- l'ingestion JSON/CSV et le nombre de lignes acceptées/rejetées ;
+- la r—ception HTTP et le code de statut ;
+- l'ingestion JSON/CSV et le nombre de lignes accept—es/rejet—es ;
 - les appels PostgreSQL ;
 - l'appel au provider LLM, sans envoyer le contenu sensible du prompt ;
 - les fallback et timeouts.
 
-Consultez les traces dans `http://localhost:16686`, recherchez par `request_id`, endpoint, statut HTTP ou provider, puis corrèlez le trace ID avec les logs Grafana/Loki.
+Consultez les traces dans `http://localhost:16686`, recherchez par `request_id`, endpoint, statut HTTP ou provider, puis corr—lez le trace ID avec les logs Grafana/Loki.
 
 ### Alertes de base
 
-Importez ou adaptez ces règles Prometheus :
+Importez ou adaptez ces r—gles Prometheus :
 
 ```yaml
 groups:
@@ -2107,7 +2107,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Taux d'erreurs API supérieur à 5 %"
+          summary: "Taux d'erreurs API sup—rieur — 5 %"
 
       - alert: LogSentinelDatabaseDown
         expr: up{job="log-sentinel-api"} == 0
@@ -2115,7 +2115,7 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "API ou cible de santé indisponible"
+          summary: "API ou cible de sant— indisponible"
 
       - alert: LogSentinelHighLatency
         expr: |
@@ -2125,17 +2125,17 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Latence p95 supérieure à 500 ms"
+          summary: "Latence p95 sup—rieure — 500 ms"
 ```
 
-### Arrêt et hygiène
+### Arr—t et hygi—ne
 
 ```bash
 docker stop log-sentinel-grafana log-sentinel-prometheus log-sentinel-loki log-sentinel-jaeger
 docker rm log-sentinel-grafana log-sentinel-prometheus log-sentinel-loki log-sentinel-jaeger
 ```
 
-En production, activez TLS, l'authentification Grafana, la rétention adaptée, le chiffrement des données de télémétrie et une allowlist réseau. Ne publiez pas Prometheus, Loki ou Jaeger directement sur Internet.
+En production, activez TLS, l'authentification Grafana, la r—tention adapt—e, le chiffrement des donn—es de t—l—m—trie et une allowlist r—seau. Ne publiez pas Prometheus, Loki ou Jaeger directement sur Internet.
 
 ---
 

@@ -1,16 +1,16 @@
-# Guide de SÃ©curitÃ©
+# Guide de Sécurité
 
-## Principes de SÃ©curitÃ©
+## Principes de Sécurité
 
 ### Defense in Depth
-Le projet applique plusieurs couches de sÃ©curitÃ© :
+Le projet applique plusieurs couches de sécurité :
 
 1. **Network** : Isolation Docker, pare-feu
-2. **Application** : Validation, rate limiting, headers de sÃ©curitÃ©
+2. **Application** : Validation, rate limiting, headers de sécurité
 3. **Data** : Chiffrement, masquage, hachage
 4. **Infrastructure** : Secrets management, scanning
 
-### Architecture de Sécurité
+### Architecture de S—curit—
 
 ```
 ???????????????????????????????????????????????????????????????????????
@@ -31,11 +31,11 @@ Le projet applique plusieurs couches de sÃ©curitÃ© :
 ?  ?   WEB APP    ?  ?  POSTGRES    ?  ?    VAULT     ?             ?
 ?  ?  (FastAPI)   ?  ?   (DB)       ?  ?  (Secrets)   ?             ?
 ?  ?              ?  ?              ?  ?              ?             ?
-?  ?  Non-root   ?  ?  Volume     ?  ?  TLS        ?             ?
-?  ?  Read-only  ?  ?   persistant ?  ?  Policies   ?             ?
-?  ?  Cap drop   ?  ?  TLS        ?  ?  Audit log  ?             ?
-?  ?  Rate limit ?  ?  Backups    ?  ?              ?             ?
-?  ?  JWT Auth   ?  ?              ?  ?              ?             ?
+?  ? — Non-root   ?  ? — Volume     ?  ? — TLS        ?             ?
+?  ? — Read-only  ?  ?   persistant ?  ? — Policies   ?             ?
+?  ? — Cap drop   ?  ? — TLS        ?  ? — Audit log  ?             ?
+?  ? — Rate limit ?  ? — Backups    ?  ?              ?             ?
+?  ? — JWT Auth   ?  ?              ?  ?              ?             ?
 ?  ????????????????  ????????????????  ????????????????             ?
 ?         ?                 ?                 ?                      ?
 ?         ?????????????????????????????????????                      ?
@@ -57,73 +57,73 @@ Le projet applique plusieurs couches de sÃ©curitÃ© :
 ???????????????????????????????????????????????????????????????????????
 ```
 
-### Modèle de Menaces (Threat Model - STRIDE)
+### Mod—le de Menaces (Threat Model - STRIDE)
 
-| Menace | Description | Vecteur d'attaque | Impact | Probabilité | Mitigation |
+| Menace | Description | Vecteur d'attaque | Impact | Probabilit— | Mitigation |
 |--------|-------------|-------------------|--------|-------------|------------|
-| **Spoofing** | Usurpation d'identité utilisateur/API | Tokens JWT volés, credentials faibles | Élevé | Moyenne | JWT court (30min), bcrypt cost 12, rate limit auth 10/min |
-| **Tampering** | Modification de logs/analyses | Injection SQL, mass assignment, CSV malveillant | Élevé | Faible | Validation Pydantic stricte, requêtes paramétrées, read-only FS |
-| **Repudiation** | Déni d'actions effectuées | Absence de logs d'audit, suppression logs | Moyen | Moyenne | Audit logging immuable (7 ans), soft delete users |
-| **Information Disclosure** | Fuite de données sensibles | Logs contenant secrets, erreurs verbeuses, /docs exposé | Élevé | Moyenne | Redaction patterns (IP, email, tokens), headers sécurité, pas de secrets en logs |
-| **Denial of Service** | Indisponibilité service | Payloads volumineux, boucles LLM, DB exhaustion | Élevé | Moyenne | Request size limit (10MB), bulk limit (10k), rate limiting, timeouts LLM |
-| **Elevation of Privilege** | Élévation de privilèges | IDOR, bypass auth, role confusion | Élevé | Faible | Validation ID > 0, checks is_active, pas de role escalation API |
+| **Spoofing** | Usurpation d'identit— utilisateur/API | Tokens JWT vol—s, credentials faibles | —lev— | Moyenne | JWT court (30min), bcrypt cost 12, rate limit auth 10/min |
+| **Tampering** | Modification de logs/analyses | Injection SQL, mass assignment, CSV malveillant | —lev— | Faible | Validation Pydantic stricte, requ—tes param—tr—es, read-only FS |
+| **Repudiation** | D—ni d'actions effectu—es | Absence de logs d'audit, suppression logs | Moyen | Moyenne | Audit logging immuable (7 ans), soft delete users |
+| **Information Disclosure** | Fuite de donn—es sensibles | Logs contenant secrets, erreurs verbeuses, /docs expos— | —lev— | Moyenne | Redaction patterns (IP, email, tokens), headers s—curit—, pas de secrets en logs |
+| **Denial of Service** | Indisponibilit— service | Payloads volumineux, boucles LLM, DB exhaustion | —lev— | Moyenne | Request size limit (10MB), bulk limit (10k), rate limiting, timeouts LLM |
+| **Elevation of Privilege** | —l—vation de privil—ges | IDOR, bypass auth, role confusion | —lev— | Faible | Validation ID > 0, checks is_active, pas de role escalation API |
 
 #---
 
-## Threat Model Détaillé
+## Threat Model D—taill—
 
-### Scénarios de Menaces par Domaine
+### Sc—narios de Menaces par Domaine
 
 #### Domaine : Authentification et Identification
 
-| Scénario | ATT&CK T1078 | Description | Impact | Probabilité | Mitigation | Test de validation |
+| Sc—nario | ATT&CK T1078 | Description | Impact | Probabilit— | Mitigation | Test de validation |
 |----------|-------------|-------------|--------|-------------|------------|-------------------|
-| **Force brute sur /auth/login** | T1110.001 | Attaques par dictionnaire sur les credentials | Élevé | Faible | Rate limit 10/min, lockout après 5 échecs, bcrypt cost 12 | `pytest tests/test_security.py::test_brute_force_protection` |
-| **JWT replay** | T1550.001 | Vol et réutilisation de token JWT | Élevé | Moyenne | Expiration 30min, rotation de clé, `jti` claim unique | `pytest tests/test_security.py::test_jwt_replay_prevention` |
-| **Credential stuffing** | T1078 | Réutilisation de creds leakées | Élevé | Moyenne | Bcrypt unique par user, MFA prévue v1.3 | Rotation secrets trimestrielle |
-| **Énumération d'users** | T1087 | Scanning `/users/{id}` pour découvrir des IDs | Moyen | Moyenne | Réponses uniformes (404), rate limit sur GET /users | Vérifier réponse identique pour user existant/inexistant |
+| **Force brute sur /auth/login** | T1110.001 | Attaques par dictionnaire sur les credentials | —lev— | Faible | Rate limit 10/min, lockout apr—s 5 —checs, bcrypt cost 12 | `pytest tests/test_security.py::test_brute_force_protection` |
+| **JWT replay** | T1550.001 | Vol et r—utilisation de token JWT | —lev— | Moyenne | Expiration 30min, rotation de cl—, `jti` claim unique | `pytest tests/test_security.py::test_jwt_replay_prevention` |
+| **Credential stuffing** | T1078 | R—utilisation de creds leak—es | —lev— | Moyenne | Bcrypt unique par user, MFA pr—vue v1.3 | Rotation secrets trimestrielle |
+| **—num—ration d'users** | T1087 | Scanning `/users/{id}` pour d—couvrir des IDs | Moyen | Moyenne | R—ponses uniformes (404), rate limit sur GET /users | V—rifier r—ponse identique pour user existant/inexistant |
 
 #### Domaine : Ingestion de Logs
 
-| Scénario | ATT&CK T1071.001 | Description | Impact | Probabilité | Mitigation | Test de validation |
+| Sc—nario | ATT&CK T1071.001 | Description | Impact | Probabilit— | Mitigation | Test de validation |
 |----------|-------------------|-------------|--------|-------------|------------|-------------------|
-| **Injection dans message de log** | T1059.001 | Logs contenant du code exécutable | Élevé | Faible | Escaping des sorties, validation regex, sandbox LLM | `pytest tests/test_security.py::test_log_injection` |
-| **CSV injection (formulaire)** | T1235 | Fichier CSV contenant `=cmd|...` | Moyen | Moyenne | Préfixe `'=` dans les cellules, sandbox | `pytest tests/test_logs.py::test_csv_injection_rejection` |
-| **Upload fichier malveillant** | T1105 | Fichier `.py` ou `.sh` déguisé en `.csv` | Critique | Faible | Extension whitelist `.csv`, MIME check, antivirus | Vérifier seuls `.csv` acceptés |
-| **Payload > 10 MB** | T1499 | DoS via upload massif | Élevé | Moyenne | `max_upload_size=10MB` dans middleware | Tester upload 11MB ? 413 |
+| **Injection dans message de log** | T1059.001 | Logs contenant du code ex—cutable | —lev— | Faible | Escaping des sorties, validation regex, sandbox LLM | `pytest tests/test_security.py::test_log_injection` |
+| **CSV injection (formulaire)** | T1235 | Fichier CSV contenant `=cmd|...` | Moyen | Moyenne | Pr—fixe `'=` dans les cellules, sandbox | `pytest tests/test_logs.py::test_csv_injection_rejection` |
+| **Upload fichier malveillant** | T1105 | Fichier `.py` ou `.sh` d—guis— en `.csv` | Critique | Faible | Extension whitelist `.csv`, MIME check, antivirus | V—rifier seuls `.csv` accept—s |
+| **Payload > 10 MB** | T1499 | DoS via upload massif | —lev— | Moyenne | `max_upload_size=10MB` dans middleware | Tester upload 11MB ? 413 |
 
 #### Domaine : Analyse IA
 
-| Scénario | ATT&CK T1235 | Description | Impact | Probabilité | Mitigation | Test de validation |
+| Sc—nario | ATT&CK T1235 | Description | Impact | Probabilit— | Mitigation | Test de validation |
 |----------|-------------|-------------|--------|-------------|------------|-------------------|
-| **Prompt injection** | T1235 | Log contenant des instructions pour le LLM | Élevé | Moyenne | Sanitization pre-LLM, sandbox résultat, validation schéma | `pytest tests/test_providers.py::test_prompt_injection_safety` |
-| **Exfiltration via LLM** | T1048.003 | Données sortantes via réponses LLM | Critique | Faible | Pattern blocklist PII, rate limit sortie | `pytest tests/test_security.py::test_llm_output_sanitization` |
-| **Agent IA détourné** | T1059 | Résultat LLM exécuté comme commande | Critique | Très faible | Résultat LLM jamais exécuté, traité comme données | Vérifier `eval()` jamais appelé |
+| **Prompt injection** | T1235 | Log contenant des instructions pour le LLM | —lev— | Moyenne | Sanitization pre-LLM, sandbox r—sultat, validation sch—ma | `pytest tests/test_providers.py::test_prompt_injection_safety` |
+| **Exfiltration via LLM** | T1048.003 | Donn—es sortantes via r—ponses LLM | Critique | Faible | Pattern blocklist PII, rate limit sortie | `pytest tests/test_security.py::test_llm_output_sanitization` |
+| **Agent IA d—tourn—** | T1059 | R—sultat LLM ex—cut— comme commande | Critique | Tr—s faible | R—sultat LLM jamais ex—cut—, trait— comme donn—es | V—rifier `eval()` jamais appel— |
 
 #### Domaine : Infrastructure et Secrets
 
-| Scénario | ATT&CK T1078 | Description | Impact | Probabilité | Mitigation | Test de validation |
+| Sc—nario | ATT&CK T1078 | Description | Impact | Probabilit— | Mitigation | Test de validation |
 |----------|-------------|-------------|--------|-------------|------------|-------------------|
-| **Secret dans Git** | T1078 | Clé API ou password commité | Critique | Faible | `.gitignore`, git-secrets pre-commit, trufflehog CI | `pre-commit run --all-files` |
-| **Docker escape** | T1068 | Conteneur root accède à host | Critique | Très faible | Non-root (UID 1000), `cap_drop ALL`, read-only FS | Trivy scan image |
-| **Vol de token Vault** | T1003.001 | Lecture des secrets Vault | Critique | Faible | AppRole TTL 1h, audit logging, réseau isolé | Vérifier policies Vault |
+| **Secret dans Git** | T1078 | Cl— API ou password commit— | Critique | Faible | `.gitignore`, git-secrets pre-commit, trufflehog CI | `pre-commit run --all-files` |
+| **Docker escape** | T1068 | Conteneur root acc—de — host | Critique | Tr—s faible | Non-root (UID 1000), `cap_drop ALL`, read-only FS | Trivy scan image |
+| **Vol de token Vault** | T1003.001 | Lecture des secrets Vault | Critique | Faible | AppRole TTL 1h, audit logging, r—seau isol— | V—rifier policies Vault |
 
-### Chaînes d'Attaque (Attack Chains)
+### Cha—nes d'Attaque (Attack Chains)
 
-#### Chain 1 : Compromission complète via Rate Limit Bypass
+#### Chain 1 : Compromission compl—te via Rate Limit Bypass
 
 ```
 [1] Scanner les endpoints (T1595.002)
     ?
 [2] Trouver endpoint sans rate limit (T1046)
     ?
-[3] DoS par volume de requêtes (T1499)
+[3] DoS par volume de requ—tes (T1499)
     ?
 [4] Exploiter la charge pour masquer d'autres attaques (T1498)
     ?
-[5] Injection SQL via requêtes en bulk (T1190)
+[5] Injection SQL via requ—tes en bulk (T1190)
     ?
-[6] Exfiltration de données (T1041)
+[6] Exfiltration de donn—es (T1041)
 ```
 
 **Mitigation :** Rate limit global + par IP, WAF, monitoring anomalies.
@@ -133,11 +133,11 @@ Le projet applique plusieurs couches de sÃ©curitÃ© :
 ```
 [1] Injecter prompt dans log message (T1235)
     ?
-[2] Analyser le log ? LLM exécute l'instruction cachée (T1059)
+[2] Analyser le log ? LLM ex—cute l'instruction cach—e (T1059)
     ?
-[3] LLM retourne des secrets dans le résultat (T1048)
+[3] LLM retourne des secrets dans le r—sultat (T1048)
     ?
-[4] Réponse de l'API expose les secrets (T1048.003)
+[4] R—ponse de l'API expose les secrets (T1048.003)
 ```
 
 **Mitigation :** Sanitization pre-LLM, sandboxing, validation de sortie.
@@ -145,72 +145,72 @@ Le projet applique plusieurs couches de sÃ©curitÃ© :
 #### Chain 3 : Vol de Secrets via Supply Chain
 
 ```
-[1] Compromettre un package npm/pip dépendant (T1195.002)
+[1] Compromettre un package npm/pip d—pendant (T1195.002)
     ?
 [2] Code malveillant lit les variables d'env (T1005)
     ?
 [3] Envoi des secrets vers serveur externe (T1048)
     ?
-[4] Utilisation des secrets pour accéder à Vault (T1003.001)
+[4] Utilisation des secrets pour acc—der — Vault (T1003.001)
 ```
 
-**Mitigation :** `pip-audit` CI, dépendances pinées, réseau egress restrictif.
+**Mitigation :** `pip-audit` CI, d—pendances pin—es, r—seau egress restrictif.
 
-### Mapping MITRE ATT&CK (Sélection Clé)
+### Mapping MITRE ATT&CK (S—lection Cl—)
 
-| Technique ID | Technique | Tactic | Présence dans le projet | Contrôle |
+| Technique ID | Technique | Tactic | Pr—sence dans le projet | Contr—le |
 |-------------|-----------|---------|------------------------|----------|
 | T1078.003 | Cloud Accounts | Initial Access | JWT auth | Expiration + rotation |
 | T1059.001 | PowerShell / Shell | Execution | Logs contenus | Sandbox + validation |
 | T1071.001 | Web Protocols | C2 | HTTP API | TLS + rate limit |
 | T1003.001 | OS Credential Dumping | Credential Access | Secrets Vault | AppRole + audit |
 | T1005 | Data from Local System | Collection | Fichiers read-only | FS permissions |
-| T1048.003 | Exfiltration Over Unencrypted Non-C2 Protocol | Exfiltration | Réponses API | Redaction PII |
+| T1048.003 | Exfiltration Over Unencrypted Non-C2 Protocol | Exfiltration | R—ponses API | Redaction PII |
 | T1190 | Exploit Public-Facing Application | Initial Access | API endpoints | Validation Pydantic |
-| T1195.002 | Supply Chain Compromise | Supply Chain | Dépendances | pip-audit, Trivy |
+| T1195.002 | Supply Chain Compromise | Supply Chain | D—pendances | pip-audit, Trivy |
 | T1235 | Data Manipulation | Impact | Logs/Analyses | Schema validation |
 | T1499 | Endpoint Denial of Service | Impact | Rate limiting | Limites par endpoint |
 | T1550.001 | Application Access Token | Persistence | JWT tokens | Court TTL (30min) |
 | T1068 | Exploitation for Privilege Escalation | Privilege Escalation | Docker escape | Non-root, cap_drop |
 
-### Enrichissement du modèle STRIDE existant avec contrôles techniques
+### Enrichissement du mod—le STRIDE existant avec contr—les techniques
 
-| Menace STRIDE | Contrôle technique | Outil | Fréquence | Statut |
+| Menace STRIDE | Contr—le technique | Outil | Fr—quence | Statut |
 |---------------|-------------------|-------|-----------|--------|
 | Spoofing | JWT + bcrypt + rate limit | Custom middleware | Continu | ? |
-| Tampering | Validation Pydantic + requêtes paramétrées | SQLAlchemy | Continu | ? |
+| Tampering | Validation Pydantic + requ—tes param—tr—es | SQLAlchemy | Continu | ? |
 | Repudiation | Audit logs immuables | Loki (7 ans) | Continu | ? |
 | Information Disclosure | Redaction middleware + headers | Custom middleware | Continu | ? |
 | DoS | Rate limit + size limits + timeouts | Custom middleware | Continu | ? |
 | Elevation | IDOR validation + role checks | Route dependencies | Continu | ? |
-| **Nouveau :** CSRF | CSRF token sur state-changing ops | FastAPI middleware | Continu | ? Prévu v1.3 |
-| **Nouveau :** Open Redirect | Validation URL de redirection | Validator | Continu | ? Prévu v1.3 |
-| **Nouveau :** Insecure Deserialization | Désactivation pickle, JSON uniquement | Config | Continu | ? |
+| **Nouveau :** CSRF | CSRF token sur state-changing ops | FastAPI middleware | Continu | ? Pr—vu v1.3 |
+| **Nouveau :** Open Redirect | Validation URL de redirection | Validator | Continu | ? Pr—vu v1.3 |
+| **Nouveau :** Insecure Deserialization | D—sactivation pickle, JSON uniquement | Config | Continu | ? |
 
 ---
 
 ## Matrice de Risques (Risk Matrix)
 
-| Probabilité \ Impact | Faible | Moyen | Élevé | Critique |
+| Probabilit— \ Impact | Faible | Moyen | —lev— | Critique |
 |---------------------|--------|-------|-------|----------|
-| **Très probable** | - | Rate limit bypass | DoS via bulk | - |
+| **Tr—s probable** | - | Rate limit bypass | DoS via bulk | - |
 | **Probable** | Info disclosure logs | JWT replay | SQLi tentative | - |
 | **Peu probable** | - | CSV injection | Privilege escalation | Supply chain |
 | **Rare** | - | - | Vault compromise | Zero-day |
 
 ### Surface d'Attaque
 
-| Composant | Ports exposés | Authentification | Données sensibles | Classification |
+| Composant | Ports expos—s | Authentification | Donn—es sensibles | Classification |
 |-----------|---------------|------------------|-------------------|----------------|
 | FastAPI Web | 5000 (HTTP) | JWT Bearer | Logs, users, analyses | Public API |
 | PostgreSQL | 5432 (internal) | User/Pass + TLS | Tous les logs, users | Internal |
 | Vault | 8200 (internal) | Token + TLS | Secrets (DB, API keys) | Internal |
 | LLM Providers | 443 (external) | API Key | Prompts logs | External |
-| Loki | 3100 (internal) | None (internal) | Logs agrégés | Internal |
-| Prometheus | 9090 (internal) | None (internal) | Métriques | Internal |
+| Loki | 3100 (internal) | None (internal) | Logs agr—g—s | Internal |
+| Prometheus | 9090 (internal) | None (internal) | M—triques | Internal |
 | Jaeger | 16686 (internal) | None (internal) | Traces | Internal |
 
-### Flux de Données Sensibles
+### Flux de Donn—es Sensibles
 
 ```
 User Input (JSON/CSV)
@@ -229,25 +229,25 @@ User Input (JSON/CSV)
          ?
          ?
 ????????????????????
-? SQLAlchemy       ?  ? Requêtes paramétrées, pas de concaténation
+? SQLAlchemy       ?  ? Requ—tes param—tr—es, pas de concat—nation
 ? ORM / Raw SQL    ?
 ????????????????????
          ?
          ?
 ????????????????????
-? PostgreSQL       ?  ? Volume chiffré, backups chiffrés
+? PostgreSQL       ?  ? Volume chiffr—, backups chiffr—s
 ? (TLS, Volume)    ?
 ????????????????????
          ?
          ?
 ????????????????????
-? LLM Provider     ?  ? Timeout 30s, Fake fallback, pas de PII envoyée
+? LLM Provider     ?  ? Timeout 30s, Fake fallback, pas de PII envoy—e
 ? (Analyze)        ?
 ????????????????????
          ?
          ?
 ????????????????????
-? Response         ?  ? Redaction patterns appliqués
+? Response         ?  ? Redaction patterns appliqu—s
 ? Redaction        ?
 ????????????????????
          ?
@@ -257,13 +257,13 @@ User Input (JSON/CSV)
 
 ---
 
-## Configuration SÃ©curisÃ©e
+## Configuration Sécurisée
 
 ### Variables d'environnement sensibles
-Les variables sensibles doivent Ãªtre :
-- StockÃ©es dans `.env` (ignorÃ© par Git)
+Les variables sensibles doivent être :
+- Stockées dans `.env` (ignoré par Git)
 - Ou dans un vault (HashiCorp Vault)
-- JAMAIS commitÃ©es dans le dÃ©pÃ´t
+- JAMAIS commitées dans le dépôt
 
 ### Exemple de configuration `.env`
 ```env
@@ -285,9 +285,9 @@ vault kv put secret/log-sentinel \
   secret_key="..."
 ```
 
-## Analyse de SÃ©curitÃ©
+## Analyse de Sécurité
 
-### Tests de pÃ©nÃ©tration
+### Tests de pénétration
 La suite de tests inclut :
 - Injection SQL
 - XSS
@@ -295,16 +295,16 @@ La suite de tests inclut :
 - Broken authentication
 - Sensitive data exposure
 
-### Scan de dÃ©pendances
+### Scan de dépendances
 ```bash
-# VÃ©rifier les vulnÃ©rabilitÃ©s
+# Vérifier les vulnérabilités
 safety check -r requirements.txt
 pip-audit -r requirements.txt
 ```
 
 ### Analyse de code
 ```bash
-# Bandit pour la sÃ©curitÃ© Python
+# Bandit pour la sécurité Python
 bandit -r app.py -f json -o bandit-report.json
 
 # Semgrep pour l'analyse statique
@@ -313,53 +313,53 @@ semgrep --config=auto app.py
 
 ## Bonnes Pratiques
 
-### Pour les dÃ©veloppeurs
+### Pour les développeurs
 1. Ne jamais commit de secrets
 2. Utiliser `git rebase` pour un historique propre
-3. Ãcrire des tests pour chaque feature
+3. Écrire des tests pour chaque feature
 4. Valider avec `pre-commit` avant de push
 
 ### Pour l'ops
 1. Surveiller les logs d'audit
-2. Mettre Ã  jour les dÃ©pendances rÃ©guliÃ¨rement
-3. Sauvegarder la base de donnÃ©es
-4. Faire des scans de sÃ©curitÃ© rÃ©guliers
+2. Mettre à jour les dépendances régulièrement
+3. Sauvegarder la base de données
+4. Faire des scans de sécurité réguliers
 
 ### Pour les auditeurs
-1. Consulter le rapport de sÃ©curitÃ© (`security_audit.md`)
-2. VÃ©rifier les logs d'accÃ¨s
+1. Consulter le rapport de sécurité (`security_audit.md`)
+2. Vérifier les logs d'accès
 3. Auditer les permissions des utilisateurs
-4. ContrÃ´ler la configuration Vault
-## Checklist de Déploiement
+4. Contrôler la configuration Vault
+## Checklist de D—ploiement
 
-- [ ] Mettre à jour les dépendances
-- [ ] Exécuter les tests de sécurité
+- [ ] Mettre — jour les d—pendances
+- [ ] Ex—cuter les tests de s—curit—
 - [ ] Configurer les variables d'environnement
-- [ ] Vérifier les permissions Vault
-- [ ] Sauvegarder la base de données
-- [ ] Surveiller les logs post-déploiement
+- [ ] V—rifier les permissions Vault
+- [ ] Sauvegarder la base de donn—es
+- [ ] Surveiller les logs post-d—ploiement
 
-## Headers de Sécurité
+## Headers de S—curit—
 
 | Header | Valeur | Description |
 |--------|--------|-------------|
-| X-Content-Type-Options | nosniff | Empêche le MIME sniffing |
-| X-Frame-Options | DENY | Empêche le clickjacking |
+| X-Content-Type-Options | nosniff | Emp—che le MIME sniffing |
+| X-Frame-Options | DENY | Emp—che le clickjacking |
 | X-XSS-Protection | 1; mode=block | Protection XSS |
 | Referrer-Policy | strict-origin-when-cross-origin | Politique de referral |
 | Content-Security-Policy | default-src 'self' | Politique CSP |
 
 ## Monitoring
 
-### Métriques clés
+### M—triques cl—s
 - Taux d'erreurs : < 1%
 - Latence P99 : < 200ms
-- Disponibilité : > 99.9%
+- Disponibilit— : > 99.9%
 
-### Alertes configurées
-- Erreurs 500 : Immédiate
-- Latence élevée : 5 minutes
-- Base de données lente : 2 minutes
+### Alertes configur—es
+- Erreurs 500 : Imm—diate
+- Latence —lev—e : 5 minutes
+- Base de donn—es lente : 2 minutes
 
 ## Sauvegarde et Restauration
 
@@ -373,59 +373,59 @@ pg_dump -h db music_hall > backup.sql
 psql -h db music_hall < backup.sql
 ```
 
-### Fréquence
+### Fr—quence
 - Quotidienne : 3h du matin
 - Hebdomadaire : Dimanche 2h
 - Mensuelle : Premier du mois
 
-## Rétention des Données
+## R—tention des Donn—es
 
-| Type de données | Durée de rétention |
+| Type de donn—es | Dur—e de r—tention |
 |-----------------|-------------------|
 | Logs | 90 jours |
 | Analyses | 90 jours |
 | Utilisateurs | 365 jours |
 | Logs d'audit | 7 ans |
 
-Les données sont supprimées automatiquement après la période.
+Les donn—es sont supprim—es automatiquement apr—s la p—riode.
 
-## Plan de Réponse aux Incidents
+## Plan de R—ponse aux Incidents
 
-1. **Détection** : Alertes automatisées
-2. **Containment** : Isolation du système affecté
-3. **Éradication** : Suppression de la menace
-4. **Restauration** : Retour à la normale
-5. **Amélioration** : Revue post-incident
+1. **D—tection** : Alertes automatis—es
+2. **Containment** : Isolation du syst—me affect—
+3. **—radication** : Suppression de la menace
+4. **Restauration** : Retour — la normale
+5. **Am—lioration** : Revue post-incident
 
 ---
 
 ## Incident Response Runbook
 
-Ce runbook détaille les procédures opérationnelles pour répondre aux incidents de sécurité sur Log Sentinel API.
+Ce runbook d—taille les proc—dures op—rationnelles pour r—pondre aux incidents de s—curit— sur Log Sentinel API.
 
-### 0. Procédure opérationnelle
+### 0. Proc—dure op—rationnelle
 
-> Objectif : contenir rapidement l'impact, préserver les preuves et restaurer un service vérifiable sans détruire les indices. Toutes les heures sont en UTC. Ne copiez jamais de secret, token ou donnée personnelle dans le ticket d'incident.
+> Objectif : contenir rapidement l'impact, pr—server les preuves et restaurer un service v—rifiable sans d—truire les indices. Toutes les heures sont en UTC. Ne copiez jamais de secret, token ou donn—e personnelle dans le ticket d'incident.
 
 #### 0.1 Ouvrir et qualifier l'incident
 
-1. Créer un identifiant unique (`INC-AAAAMMJJ-XXX`) et un canal privé dédié.
-2. Nommer un **Incident Commander (IC)** responsable des décisions, une personne en charge de la technique et une personne en charge de la communication.
-3. Noter l'heure de détection, la source de l'alerte, les services touchés, le périmètre supposé et le niveau de sévérité.
+1. Cr—er un identifiant unique (`INC-AAAAMMJJ-XXX`) et un canal priv— d—di—.
+2. Nommer un **Incident Commander (IC)** responsable des d—cisions, une personne en charge de la technique et une personne en charge de la communication.
+3. Noter l'heure de d—tection, la source de l'alerte, les services touch—s, le p—rim—tre suppos— et le niveau de s—v—rit—.
 4. Classer l'incident :
 
-| Niveau | Critère d'entrée | Réponse cible | Exemple |
+| Niveau | Crit—re d'entr—e | R—ponse cible | Exemple |
 |--------|------------------|---------------|---------|
-| **P0** | compromission active, fuite confirmée, perte ou corruption de données, indisponibilité critique | 15 minutes | secret de production exposé, injection SQL réussie |
-| **P1** | exploitation probable ou dégradation majeure | 1 heure | bypass d'authentification, DoS efficace |
-| **P2** | anomalie contenue ou tentative bloquée | 4 heures | scan, pic de 429, erreur isolée |
-| **P3** | événement sans impact confirmé | 24 heures | rejet CSV, tentative de connexion échouée |
+| **P0** | compromission active, fuite confirm—e, perte ou corruption de donn—es, indisponibilit— critique | 15 minutes | secret de production expos—, injection SQL r—ussie |
+| **P1** | exploitation probable ou d—gradation majeure | 1 heure | bypass d'authentification, DoS efficace |
+| **P2** | anomalie contenue ou tentative bloqu—e | 4 heures | scan, pic de 429, erreur isol—e |
+| **P3** | —v—nement sans impact confirm— | 24 heures | rejet CSV, tentative de connexion —chou—e |
 
-5. Ouvrir une chronologie partagée. Chaque action doit avoir un horodatage, un auteur, une commande ou une décision et son résultat.
+5. Ouvrir une chronologie partag—e. Chaque action doit avoir un horodatage, un auteur, une commande ou une d—cision et son r—sultat.
 
-#### 0.2 Préserver les preuves avant toute correction
+#### 0.2 Pr—server les preuves avant toute correction
 
-- Capturer l'état des services et des conteneurs avant de redémarrer ou supprimer une ressource :
+- Capturer l'—tat des services et des conteneurs avant de red—marrer ou supprimer une ressource :
 
 ```bash
 date -u +%FT%TZ
@@ -434,53 +434,53 @@ docker compose -f compose.yaml -f docker-compose.production.yml logs --since=2h 
 docker compose -f compose.yaml -f docker-compose.production.yml logs --since=2h db > "INC-<id>_db_$(date -u +%Y%m%dT%H%M%SZ).log"
 ```
 
-- Exporter les métriques et les traces pertinentes depuis Prometheus, Loki et Jaeger ; conserver les requêtes utilisées.
-- Faire un snapshot ou un `pg_dump` de la base dans un emplacement contrôlé, chiffré et limité aux personnes autorisées.
-- Conserver les images, versions de déploiement, tags Git, identifiants de conteneurs et horodatages. Ne pas exécuter de nettoyage, rotation ou suppression tant que l'IC n'a pas validé la préservation.
-- Journaliser les accès aux preuves et appliquer le principe du moindre privilège. Une preuve ne doit jamais être modifiée dans son emplacement d'origine.
+- Exporter les m—triques et les traces pertinentes depuis Prometheus, Loki et Jaeger ; conserver les requ—tes utilis—es.
+- Faire un snapshot ou un `pg_dump` de la base dans un emplacement contr—l—, chiffr— et limit— aux personnes autoris—es.
+- Conserver les images, versions de d—ploiement, tags Git, identifiants de conteneurs et horodatages. Ne pas ex—cuter de nettoyage, rotation ou suppression tant que l'IC n'a pas valid— la pr—servation.
+- Journaliser les acc—s aux preuves et appliquer le principe du moindre privil—ge. Une preuve ne doit jamais —tre modifi—e dans son emplacement d'origine.
 
-#### 0.3 Contenir, éradiquer et restaurer
+#### 0.3 Contenir, —radiquer et restaurer
 
-| Phase | Actions minimales | Critère de sortie |
+| Phase | Actions minimales | Crit—re de sortie |
 |-------|-------------------|-------------------|
-| **Containment** | retirer le token exposé, bloquer l'adresse ou la route abusive, activer le mode maintenance, isoler le composant touché | l'attaque ne peut plus progresser ; le périmètre est connu |
-| **Éradication** | corriger la cause racine, révoquer les credentials, supprimer l'accès non autorisé, scanner l'image et les dépendances | aucun indicateur de compromission actif ; les correctifs sont revus |
-| **Restauration** | déployer une version connue saine, restaurer les données depuis une sauvegarde validée, réactiver progressivement le trafic | `/health` est sain, les contrôles de sécurité passent, le trafic est surveillé |
-| **Surveillance renforcée** | suivre erreurs, latence, authentification, ingestion, DB et providers pendant au moins 72 h pour un P0/P1 | aucun signal de récidive pendant la fenêtre définie |
+| **Containment** | retirer le token expos—, bloquer l'adresse ou la route abusive, activer le mode maintenance, isoler le composant touch— | l'attaque ne peut plus progresser ; le p—rim—tre est connu |
+| **—radication** | corriger la cause racine, r—voquer les credentials, supprimer l'acc—s non autoris—, scanner l'image et les d—pendances | aucun indicateur de compromission actif ; les correctifs sont revus |
+| **Restauration** | d—ployer une version connue saine, restaurer les donn—es depuis une sauvegarde valid—e, r—activer progressivement le trafic | `/health` est sain, les contr—les de s—curit— passent, le trafic est surveill— |
+| **Surveillance renforc—e** | suivre erreurs, latence, authentification, ingestion, DB et providers pendant au moins 72 h pour un P0/P1 | aucun signal de r—cidive pendant la fen—tre d—finie |
 
-Toute décision destructive (suppression de compte, rotation de clé, restauration, purge) doit être approuvée par l'IC et consignée. Si la cause n'est pas comprise, privilégier l'isolement à une correction empirique.
+Toute d—cision destructive (suppression de compte, rotation de cl—, restauration, purge) doit —tre approuv—e par l'IC et consign—e. Si la cause n'est pas comprise, privil—gier l'isolement — une correction empirique.
 
 #### 0.4 Communication et escalade
 
-- Publier un premier statut dans le canal d'incident avec : identifiant, niveau, impact connu, heure de début, IC, actions en cours et prochaine mise à jour.
-- Pour P0, envoyer une mise à jour au moins toutes les 30 minutes ; pour P1, toutes les heures.
-- La communication externe et la notification réglementaire sont coordonnées par les rôles Communication et Legal/Compliance. Ne jamais divulguer de détail technique ou de donnée sensible avant validation.
-- Escalader immédiatement au CISO, à la direction et au responsable juridique pour une fuite de données, une compromission de secret ou un impact client confirmé.
+- Publier un premier statut dans le canal d'incident avec : identifiant, niveau, impact connu, heure de d—but, IC, actions en cours et prochaine mise — jour.
+- Pour P0, envoyer une mise — jour au moins toutes les 30 minutes ; pour P1, toutes les heures.
+- La communication externe et la notification r—glementaire sont coordonn—es par les r—les Communication et Legal/Compliance. Ne jamais divulguer de d—tail technique ou de donn—e sensible avant validation.
+- Escalader imm—diatement au CISO, — la direction et au responsable juridique pour une fuite de donn—es, une compromission de secret ou un impact client confirm—.
 
-#### 0.5 Clôture et revue post-incident
+#### 0.5 Cl—ture et revue post-incident
 
-L'IC ne clôture l'incident qu'après vérification de la santé, des accès, des sauvegardes, des journaux et des alertes. Une revue post-incident doit avoir lieu sous 48 heures et produire :
+L'IC ne cl—ture l'incident qu'apr—s v—rification de la sant—, des acc—s, des sauvegardes, des journaux et des alertes. Une revue post-incident doit avoir lieu sous 48 heures et produire :
 
-- une chronologie validée et une cause racine ;
-- l'impact mesuré (utilisateurs, données, durée, disponibilité) ;
-- les actions correctives avec propriétaire et échéance ;
-- les règles de détection, tests de régression et exercices de simulation manquants ;
-- la mise à jour du présent runbook et des seuils d'alerte.
+- une chronologie valid—e et une cause racine ;
+- l'impact mesur— (utilisateurs, donn—es, dur—e, disponibilit—) ;
+- les actions correctives avec propri—taire et —ch—ance ;
+- les r—gles de d—tection, tests de r—gression et exercices de simulation manquants ;
+- la mise — jour du pr—sent runbook et des seuils d'alerte.
 
-Les actions de suivi sont suivies comme des éléments de travail distincts ; une simple fermeture de ticket ne constitue pas une clôture opérationnelle.
+Les actions de suivi sont suivies comme des —l—ments de travail distincts ; une simple fermeture de ticket ne constitue pas une cl—ture op—rationnelle.
 
 ### 1. Classification des Incidents
 
-| Niveau | Critères | Exemples | Temps de réponse | Escalade |
+| Niveau | Crit—res | Exemples | Temps de r—ponse | Escalade |
 |--------|----------|----------|------------------|----------|
-| **P0 - Critique** | Perte de données, compromission active, service down | Injection SQL réussie, RCE, fuite secrets prod, DB corrompue | < 15 min | CISO, Direction, Client si données PII |
-| **P1 - Majeur** | Dégradation sévère, vulnérabilité exploitée | DoS réussi, auth bypass, CVE HIGH en prod | < 1 heure | Lead Security, Tech Lead |
-| **P2 - Mineur** | Anomalie détectée, tentative bloquée | Scan détecté, rate limit déclenché, erreur 500 isolée | < 4 heures | Team Lead |
-| **P3 - Informationnel** | Événement de sécurité sans impact | Tentative login échouée, CSV malformed rejeté | < 24 heures | Log uniquement |
+| **P0 - Critique** | Perte de donn—es, compromission active, service down | Injection SQL r—ussie, RCE, fuite secrets prod, DB corrompue | < 15 min | CISO, Direction, Client si donn—es PII |
+| **P1 - Majeur** | D—gradation s—v—re, vuln—rabilit— exploit—e | DoS r—ussi, auth bypass, CVE HIGH en prod | < 1 heure | Lead Security, Tech Lead |
+| **P2 - Mineur** | Anomalie d—tect—e, tentative bloqu—e | Scan d—tect—, rate limit d—clench—, erreur 500 isol—e | < 4 heures | Team Lead |
+| **P3 - Informationnel** | —v—nement de s—curit— sans impact | Tentative login —chou—e, CSV malformed rejet— | < 24 heures | Log uniquement |
 
-### 2. Rôles et Responsabilités
+### 2. R—les et Responsabilit—s
 
-| Rôle | Responsable | Contact | Backup |
+| R—le | Responsable | Contact | Backup |
 |------|-------------|---------|--------|
 | **Incident Commander (IC)** | Tech Lead / Lead DevOps | Slack #incidents / Tel | Senior DevOps |
 | **Security Analyst** | Lead Security | Slack #security | Senior Dev |
@@ -488,21 +488,21 @@ Les actions de suivi sont suivies comme des éléments de travail distincts ; un
 | **Forensics** | Senior Dev | Slack #forensics | DevOps |
 | **Stakeholder Liaison** | Engineering Manager | Email/Teams | CTO |
 
-### 3. Procédures par Type d'Incident
+### 3. Proc—dures par Type d'Incident
 
 #### 3.1 Compromission de Secrets (API Keys, DB Password, JWT Secret)
 
-**Détection :**
-- Alerte Vault : accès anormal
-- Logs : requêtes depuis IP inconnue avec credentials valides
+**D—tection :**
+- Alerte Vault : acc—s anormal
+- Logs : requ—tes depuis IP inconnue avec credentials valides
 - GitHub : secret scanning alert
 
-**Actions Immédiates (T+0 à T+15min) :**
+**Actions Imm—diates (T+0 — T+15min) :**
 ```bash
-# 1. Révoquer le secret compromis
-vault kv delete secret/log-sentinel  # ou path spécifique
+# 1. R—voquer le secret compromis
+vault kv delete secret/log-sentinel  # ou path sp—cifique
 
-# 2. Générer nouveau secret
+# 2. G—n—rer nouveau secret
 openssl rand -hex 32 > new_secret.txt
 vault kv put secret/log-sentinel secret_key=@new_secret.txt
 
@@ -510,34 +510,34 @@ vault kv put secret/log-sentinel secret_key=@new_secret.txt
 docker compose -f compose.yaml -f docker-compose.production.yml exec web \
   sh -c 'echo "$NEW_SECRET" > /run/secrets/secret_key'
 
-# 4. Redémarrer les pods web (rolling restart)
+# 4. Red—marrer les pods web (rolling restart)
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps --scale web=3 web
 
 # 5. Invalider tous les JWT existants (changer SECRET_KEY)
 #    ? Force re-login de tous les utilisateurs
 ```
 
-**Investigation (T+15min à T+2h) :**
+**Investigation (T+15min — T+2h) :**
 - Analyser logs Vault : `vault audit log /var/log/vault_audit.log`
-- Vérifier Git history : `git log --all --oneline --grep="secret\|key\|password" --since="30 days ago"`
+- V—rifier Git history : `git log --all --oneline --grep="secret\|key\|password" --since="30 days ago"`
 - Scanner repo : `trufflehog git file://. --since-commit=HEAD~100`
-- Identifier scope : quel secret, depuis quand, quelles données accédées
+- Identifier scope : quel secret, depuis quand, quelles donn—es acc—d—es
 
-**Récupération :**
-- Déployer nouveaux secrets partout (CI, prod, staging, dev)
-- Mettre à jour `.env.production.example` avec placeholders
+**R—cup—ration :**
+- D—ployer nouveaux secrets partout (CI, prod, staging, dev)
+- Mettre — jour `.env.production.example` avec placeholders
 - Revue post-incident sous 48h
 
 ---
 
-#### 3.2 Injection SQL / Manipulation de Données
+#### 3.2 Injection SQL / Manipulation de Donn—es
 
-**Détection :**
+**D—tection :**
 - Alertes WAF / rate limit anomalies
-- Logs DB : erreurs syntaxe, requêtes lentes, `UNION SELECT` patterns
-- Données inattendues en base (nouveaux users, logs modifiés)
+- Logs DB : erreurs syntaxe, requ—tes lentes, `UNION SELECT` patterns
+- Donn—es inattendues en base (nouveaux users, logs modifi—s)
 
-**Actions Immédiates :**
+**Actions Imm—diates :**
 ```bash
 # 1. Isoler la DB (couper trafic entrant sauf admin)
 docker compose -f compose.yaml -f docker-compose.production.yml exec db \
@@ -547,10 +547,10 @@ docker compose -f compose.yaml -f docker-compose.production.yml exec db \
 docker compose -f compose.yaml -f docker-compose.production.yml exec db \
   pg_dump -U postgres log_sentinel > forensics_dump_$(date +%s).sql
 
-# 3. Analyser logs récents
+# 3. Analyser logs r—cents
 docker compose logs web --since=2h | grep -E "(UNION|SELECT|DROP|INSERT|UPDATE|DELETE|--|;)" | head -50
 
-# 4. Vérifier intégrité données
+# 4. V—rifier int—grit— donn—es
 docker compose exec db psql -U postgres -d log_sentinel -c "
   SELECT count(*) FROM logs WHERE message LIKE '%UNION%';
   SELECT count(*) FROM users WHERE username LIKE '%'||chr(39)||'%';
@@ -558,28 +558,28 @@ docker compose exec db psql -U postgres -d log_sentinel -c "
 ```
 
 **Investigation :**
-- Identifier endpoint vulnérable (logs + stack traces)
-- Corriger validation Pydantic / requêtes paramétrées
+- Identifier endpoint vuln—rable (logs + stack traces)
+- Corriger validation Pydantic / requ—tes param—tr—es
 - Scanner code : `semgrep --config=auto app.py --rule=sql-injection`
 
-**Récupération :**
-- Restaurer depuis backup propre si données corrompues
-- Déployer fix + tests de régression
-- Monitoring renforcé 72h
+**R—cup—ration :**
+- Restaurer depuis backup propre si donn—es corrompues
+- D—ployer fix + tests de r—gression
+- Monitoring renforc— 72h
 
 ---
 
-#### 3.3 Déni de Service (DoS / Resource Exhaustion)
+#### 3.3 D—ni de Service (DoS / Resource Exhaustion)
 
-**Détection :**
+**D—tection :**
 - Alertes Prometheus : `cpu_usage > 90%`, `memory_usage > 90%`, `request_duration_p99 > 5s`
-- Logs : burst de requêtes depuis même IP/range
+- Logs : burst de requ—tes depuis m—me IP/range
 - Health check `/health` ? timeout ou 503
 
-**Actions Immédiates :**
+**Actions Imm—diates :**
 ```bash
-# 1. Activer rate limiting strict (si pas déjà)
-#    Vérifier middleware RateLimitMiddleware dans app.py
+# 1. Activer rate limiting strict (si pas d—j—)
+#    V—rifier middleware RateLimitMiddleware dans app.py
 
 # 2. Bloquer IPs abusives (au niveau LB/NGINX)
 #    NGINX: deny 192.0.2.0/24; dans config
@@ -587,7 +587,7 @@ docker compose exec db psql -U postgres -d log_sentinel -c "
 # 3. Scale horizontal d'urgence
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --scale web=6
 
-# 4. Si DB saturée : limiter connexions
+# 4. Si DB satur—e : limiter connexions
 docker compose exec db psql -U postgres -c "ALTER DATABASE log_sentinel CONNECTION LIMIT 50;"
 
 # 5. Basculer LLM_PROVIDER=fake si analyse IA cause du DoS
@@ -597,60 +597,60 @@ docker compose restart web
 
 **Investigation :**
 - Analyser patterns : `docker compose logs web | awk '{print $1}' | sort | uniq -c | sort -nr | head -20`
-- Identifier si ciblé (endpoint spécifique) ou volumétrique
-- Vérifier si bulk ingestion `/logs/bulk` ou `/logs/ingest-csv` abusé
+- Identifier si cibl— (endpoint sp—cifique) ou volum—trique
+- V—rifier si bulk ingestion `/logs/bulk` ou `/logs/ingest-csv` abus—
 
-**Récupération :**
+**R—cup—ration :**
 - Ajuster rate limits permanents
 - Ajouter WAF rules (fail2ban, Cloudflare, NGINX rate limiting)
 - Test de charge post-fix
 
 ---
 
-#### 3.4 Fuite de Données Sensibles (PII, Logs, Analyses)
+#### 3.4 Fuite de Donn—es Sensibles (PII, Logs, Analyses)
 
-**Détection :**
+**D—tection :**
 - DLP alert : patterns PII en sortie (email, IP, carte bancaire)
-- Logs Loki/Grafana : requêtes inhabituelles sur `/logs` ou `/analyses`
+- Logs Loki/Grafana : requ—tes inhabituelles sur `/logs` ou `/analyses`
 - Signalement utilisateur / audit externe
 
-**Actions Immédiates :**
+**Actions Imm—diates :**
 ```bash
-# 1. Couper l'accès public si exposé
+# 1. Couper l'acc—s public si expos—
 #    LB/NGINX: return 403 pour /logs, /analyses sauf IP allowlist
 
-# 2. Vérifier redaction middleware (app.py SENSITIVE_PATTERNS)
+# 2. V—rifier redaction middleware (app.py SENSITIVE_PATTERNS)
 grep -n "SENSITIVE_PATTERNS" app.py
 
-# 3. Audit accès récents
+# 3. Audit acc—s r—cents
 docker compose logs web --since=24h | grep -E "(GET /logs|GET /analyses)" | awk '{print $3}' | sort | uniq -c
 
-# 4. Vérifier permissions utilisateurs
+# 4. V—rifier permissions utilisateurs
 docker compose exec db psql -U postgres -d log_sentinel -c "
   SELECT username, role, is_active, last_login FROM users WHERE is_active=true;
 "
 ```
 
 **Investigation :**
-- Quantifier données exposées (combien, quel type, quelle période)
-- Identifier cause : bug redaction, endpoint non protégé, config erronée
-- Notification RGPD si données personnelles (72h max)
+- Quantifier donn—es expos—es (combien, quel type, quelle p—riode)
+- Identifier cause : bug redaction, endpoint non prot—g—, config erron—e
+- Notification RGPD si donn—es personnelles (72h max)
 
-**Récupération :**
+**R—cup—ration :**
 - Corriger le bug redaction / ajouter middleware manquant
-- Purger caches CDN / proxy si données mises en cache
-- Revue code : tous les endpoints retournant des données utilisateur
+- Purger caches CDN / proxy si donn—es mises en cache
+- Revue code : tous les endpoints retournant des donn—es utilisateur
 
 ---
 
 #### 3.5 Compromission Conteneur / Supply Chain
 
-**Détection :**
-- Trivy/Snyk : CVE CRITICAL nouvelle dans image déployée
+**D—tection :**
+- Trivy/Snyk : CVE CRITICAL nouvelle dans image d—ploy—e
 - Comportement anormal : processus inconnus, connexions sortantes suspectes
 - Falco / runtime security alert
 
-**Actions Immédiates :**
+**Actions Imm—diates :**
 ```bash
 # 1. Isoler le conteneur
 docker pause <container_id>
@@ -663,7 +663,7 @@ docker save forensics/log-sentinel-$(date +%s) > forensics_image.tar
 trivy image forensics/log-sentinel-$(date +%s) --severity HIGH,CRITICAL
 docker history forensics/log-sentinel-$(date +%s)
 
-# 4. Redeploy image propre (tag précédent connu bon)
+# 4. Redeploy image propre (tag pr—c—dent connu bon)
 docker compose -f compose.yaml -f docker-compose.production.yml up -d --no-deps web
 # ou rollback tag
 docker tag log-sentinel:v1.0.0 log-sentinel:latest
@@ -671,12 +671,12 @@ docker compose up -d --no-deps web
 ```
 
 **Investigation :**
-- Vérifier Dockerfile : `COPY` suspects, `RUN curl | sh`, base image
+- V—rifier Dockerfile : `COPY` suspects, `RUN curl | sh`, base image
 - Scanner dependencies : `pip-audit -r requirements.txt`
-- Vérifier CI : build compromise ? (GitHub Actions logs)
+- V—rifier CI : build compromise ? (GitHub Actions logs)
 
-**Récupération :**
-- Rebuild depuis base image patchée (`python:3.11-slim` latest)
+**R—cup—ration :**
+- Rebuild depuis base image patch—e (`python:3.11-slim` latest)
 - Pin versions dans requirements.txt
 - Signer images (cosign/notary) pour production
 
@@ -684,40 +684,40 @@ docker compose up -d --no-deps web
 
 #### 3.6 Attaque sur Fournisseur LLM (Prompt Injection, Data Exfiltration)
 
-**Détection :**
-- Analyses retournant résultats anormaux (exfiltration prompts)
-- Coûts API anormaux (OpenAI billing alert)
-- Logs provider : requêtes depuis IP non autorisée
+**D—tection :**
+- Analyses retournant r—sultats anormaux (exfiltration prompts)
+- Co—ts API anormaux (OpenAI billing alert)
+- Logs provider : requ—tes depuis IP non autoris—e
 
-**Actions Immédiates :**
+**Actions Imm—diates :**
 ```bash
-# 1. Basculer en mode fake immédiatement
+# 1. Basculer en mode fake imm—diatement
 docker compose exec web sh -c 'echo "fake" > /run/secrets/llm_provider'
 docker compose restart web
 
-# 2. Révoquer clé API compromise
+# 2. R—voquer cl— API compromise
 #    OpenAI: https://platform.openai.com/account/api-keys ? Revoke
 #    Vault: vault kv delete secret/log-sentinel/openai_api_key
 
-# 3. Générer nouvelle clé, stocker dans Vault
+# 3. G—n—rer nouvelle cl—, stocker dans Vault
 vault kv put secret/log-sentinel openai_api_key="sk-new-..."
 ```
 
 **Investigation :**
-- Analyser prompts envoyés : `docker compose logs web | grep "analyze" -A5 -B5`
-- Vérifier validation input avant envoi LLM (sanitization)
+- Analyser prompts envoy—s : `docker compose logs web | grep "analyze" -A5 -B5`
+- V—rifier validation input avant envoi LLM (sanitization)
 - Review prompt template dans `providers/openai_provider.py`
 
-**Récupération :**
+**R—cup—ration :**
 - Renforcer validation/sanitization pre-LLM
-- Ajouter allowlist de patterns autorisés dans prompts
-- Monitoring coûts API quotidiens
+- Ajouter allowlist de patterns autoris—s dans prompts
+- Monitoring co—ts API quotidiens
 
 ---
 
 ### 4. Playbooks de Containment Rapide
 
-#### Isolation Réseau d'Urgence
+#### Isolation R—seau d'Urgence
 
 ```bash
 # Couper tout trafic entrant vers web (sauf health check LB)
@@ -733,13 +733,13 @@ docker network connect log-sentinel_backend db
 ```bash
 # Activer read-only sur API (via variable d'env ou feature flag)
 docker compose exec web sh -c 'echo "true" > /run/secrets/maintenance_mode'
-# Dans app.py : vérifier MAINTENANCE_MODE au démarrage des routes write
+# Dans app.py : v—rifier MAINTENANCE_MODE au d—marrage des routes write
 ```
 
-#### Arrêt Propre d'Urgence
+#### Arr—t Propre d'Urgence
 
 ```bash
-# Arrêter web, garder DB/Vault/Monitoring
+# Arr—ter web, garder DB/Vault/Monitoring
 docker compose -f compose.yaml -f docker-compose.production.yml stop web
 
 # Backup DB avant investigation
@@ -755,68 +755,68 @@ docker compose exec db pg_dump -U postgres log_sentinel > emergency_backup_$(dat
 ```
 ?? INCIDENT P<level> - Log Sentinel API
 ????????????????????????????????????
-?? Début : <timestamp UTC>
+?? D—but : <timestamp UTC>
 ?? Type : <SQLi / DoS / Secret Leak / etc.>
-?? Impact : <services affectés, utilisateurs, données>
+?? Impact : <services affect—s, utilisateurs, donn—es>
 ?? Statut : <Investigating / Contained / Recovering / Resolved>
-?? Équipe : IC=<name>, Security=<name>, Comms=<name>
+?? —quipe : IC=<name>, Security=<name>, Comms=<name>
 ?? War Room : <Slack channel / Zoom link>
 ?? Prochaine MAJ : <timestamp + 30min>
 ????????????????????????????????????
 ```
 
-#### Notification Externe (si P0 avec données clients)
+#### Notification Externe (si P0 avec donn—es clients)
 
-- Email clients affectés sous 24h (RGPD Art. 33)
-- Autorité de protection données (CNIL) sous 72h
-- Communication publique préparée par Comms + Legal
+- Email clients affect—s sous 24h (RGPD Art. 33)
+- Autorit— de protection donn—es (CNIL) sous 72h
+- Communication publique pr—par—e par Comms + Legal
 
 ---
 
 ### 6. Post-Incident Review (PIR)
 
-**Délai : 48h après résolution**
+**D—lai : 48h apr—s r—solution**
 
 #### Template PIR
 
 ```markdown
 # Post-Incident Review - INC-<YYYYMMDD>-<XXX>
 
-## Résumé Exécutif
+## R—sum— Ex—cutif
 - **Incident** : <type, niveau>
-- **Durée** : <début ? fin> (<X>h<Y>m)
-- **Impact** : <utilisateurs, données, revenu, réputation>
+- **Dur—e** : <d—but ? fin> (<X>h<Y>m)
+- **Impact** : <utilisateurs, donn—es, revenu, r—putation>
 - **Cause Racine** : <5 Whys analysis>
 
 ## Chronologie
-| Heure (UTC) | Événement | Action | Auteur |
+| Heure (UTC) | —v—nement | Action | Auteur |
 |-------------|-----------|--------|--------|
-| 14:23 | Alerte Prometheus CPU > 90% | Investigation démarrée | IC |
-| 14:25 | DoS confirmé sur /logs/bulk | Rate limit activé | Security |
+| 14:23 | Alerte Prometheus CPU > 90% | Investigation d—marr—e | IC |
+| 14:25 | DoS confirm— sur /logs/bulk | Rate limit activ— | Security |
 | 14:30 | Scale web x3 | Containment | DevOps |
-| 15:10 | Root cause identifié | Fix déployé | Dev |
-| 15:45 | Trafic normalisé | Recovery | IC |
+| 15:10 | Root cause identifi— | Fix d—ploy— | Dev |
+| 15:45 | Trafic normalis— | Recovery | IC |
 
 ## Cause Racine (5 Whys)
 1. Pourquoi DoS ? ? Bulk endpoint sans limite par IP
 2. Pourquoi pas de limite ? ? Rate limiting global seulement
-3. Pourquoi global seulement ? ? Oublié lors implémentation
-4. Pourquoi oublié ? ? Pas de threat modeling sur bulk
+3. Pourquoi global seulement ? ? Oubli— lors impl—mentation
+4. Pourquoi oubli— ? ? Pas de threat modeling sur bulk
 5. Pourquoi pas de threat modeling ? ? Processus incomplet
 
 ## Actions Correctives
-| Action | Owner | Échéance | Statut |
+| Action | Owner | —ch—ance | Statut |
 |--------|-------|----------|--------|
 | Rate limit par IP sur /logs/bulk | Dev | J+2 | ?? En cours |
-| Ajouter bulk dans threat model | Security | J+5 | ? Planifié |
-| Test de charge bulk endpoint | QA | J+7 | ? Planifié |
+| Ajouter bulk dans threat model | Security | J+5 | ? Planifi— |
+| Test de charge bulk endpoint | QA | J+7 | ? Planifi— |
 | Alerting sur bulk ingestion rate | DevOps | J+3 | ?? En cours |
 
-## Leçons Apprises
-- Ce qui a bien marché : ...
-- Ce qui a échoué : ...
+## Le—ons Apprises
+- Ce qui a bien march— : ...
+- Ce qui a —chou— : ...
 - Surprises : ...
-- Améliorations process : ...
+- Am—liorations process : ...
 ```
 
 ---
@@ -826,13 +826,13 @@ docker compose exec db pg_dump -U postgres log_sentinel > emergency_backup_$(dat
 #### Commandes de Diagnostic Rapide
 
 ```bash
-# Santé globale
-make health          # ou script custom vérifiant /health, DB, Vault, LLM
+# Sant— globale
+make health          # ou script custom v—rifiant /health, DB, Vault, LLM
 
-# Logs récents (dernière heure)
+# Logs r—cents (derni—re heure)
 docker compose logs --since=1h web > incident_logs_$(date +%s).log
 
-# Métriques clés
+# M—triques cl—s
 curl -s http://localhost:9090/api/v1/query?query=up | jq .
 curl -s http://localhost:9090/api/v1/query?query=rate(http_requests_total[5m]) | jq .
 
@@ -846,35 +846,35 @@ docker compose exec web lsof -i
 
 | Service | Contact | Moyens |
 |---------|---------|--------|
-| **Hébergement Cloud** | Support AWS/Azure/GCP | Console + Phone (Enterprise) |
+| **H—bergement Cloud** | Support AWS/Azure/GCP | Console + Phone (Enterprise) |
 | **Registre Docker** | Docker Hub / GHCR | Status page + Support |
 | **Vault (HCP)** | HashiCorp Support | Portal + Slack Connect |
 | **LLM Provider** | OpenAI / Ollama | Dashboard + Email |
-| **Autorité RGPD** | CNIL (France) | https://www.cnil.fr/fr/signalement-violation-donnees |
+| **Autorit— RGPD** | CNIL (France) | https://www.cnil.fr/fr/signalement-violation-donnees |
 
 ---
 
-### 8. Checklist de Préparation (À Valider Mensuellement)
+### 8. Checklist de Pr—paration (— Valider Mensuellement)
 
-- [ ] Runbook révisé et à jour (dernière révision : <date>)
-- [ ] Contacts d'urgence vérifiés
+- [ ] Runbook r—vis— et — jour (derni—re r—vision : <date>)
+- [ ] Contacts d'urgence v—rifi—s
 - [ ] War room Slack/Zoom fonctionnel
-- [ ] Backups testés (restore drill trimestriel)
-- [ ] Forensics image snapshot procedure documentée
-- [ ] Clés de secours Vault générées et stockées hors site
-- [ ] Playbooks containment testés en staging
-- [ ] Équipe formée (tabletop exercise semestriel)
-- [ ] Communication templates à jour
-- [ ] Légal/Compliance validé processus notification
+- [ ] Backups test—s (restore drill trimestriel)
+- [ ] Forensics image snapshot procedure document—e
+- [ ] Cl—s de secours Vault g—n—r—es et stock—es hors site
+- [ ] Playbooks containment test—s en staging
+- [ ] —quipe form—e (tabletop exercise semestriel)
+- [ ] Communication templates — jour
+- [ ] L—gal/Compliance valid— processus notification
 
 ### 9. Exercices de Simulation (Tabletop)
 
-#### Scénarios d'Exercice Trimestriels
+#### Sc—narios d'Exercice Trimestriels
 
-| Scénario | Niveau | Durée | Participants | Objectif |
+| Sc—nario | Niveau | Dur—e | Participants | Objectif |
 |----------|--------|-------|--------------|----------|
 | **Secret leak** | P0 | 30 min | IC, Security, DevOps | Tester rotation secrets + notification |
-| **DoS simulé** | P1 | 45 min | IC, DevOps, QA | Tester scaling + rate limiting |
+| **DoS simul—** | P1 | 45 min | IC, DevOps, QA | Tester scaling + rate limiting |
 | **Fuite PII** | P0 | 60 min | IC, Legal, Comms | Tester RGPD notification |
 | **Vault downtime** | P1 | 30 min | DevOps, Security | Tester fallback secrets |
 | **DB corruption** | P0 | 45 min | DevOps, Security | Tester restauration backup |
@@ -883,21 +883,21 @@ docker compose exec web lsof -i
 #### Processus d'Exercice
 
 ```
-1. Annonce du scénario (10 min)
-   ? Le "facilitateur" annonce l'incident simulé
+1. Annonce du sc—nario (10 min)
+   ? Le "facilitateur" annonce l'incident simul—
 2. Investigation (15-30 min)
-   ? L'équipe diagnostique et contient (comme en réel)
-3. Résolution (15-20 min)
-   ? L'équipe applique les correctifs
+   ? L'—quipe diagnostique et contient (comme en r—el)
+3. R—solution (15-20 min)
+   ? L'—quipe applique les correctifs
 4. Debrief (15-20 min)
-   ? Revue des actions, identification des améliorations
-5. Rapport (1h après)
-   ? Document actionné intégré au runbook
+   ? Revue des actions, identification des am—liorations
+5. Rapport (1h apr—s)
+   ? Document actionn— int—gr— au runbook
 ```
 
-### 10. Automatisation de la Réponse
+### 10. Automatisation de la R—ponse
 
-#### Alertes Prometheus (Détection Automatique)
+#### Alertes Prometheus (D—tection Automatique)
 
 ```yaml
 # prometheus-rules.yml
@@ -938,30 +938,30 @@ groups:
           summary: "Provider LLM en erreur"
 ```
 
-#### Playbook d'Escalade Automatisée
+#### Playbook d'Escalade Automatis—e
 
 ```yaml
 # Escalation rules (pseudo-code)
 IF alert.severity == "critical":
-    1. Slack #incidents ( immédiat )
-    2. SMS IC ( après 5 min si non ack )
-    3. Email management ( après 15 min )
-    4. PagerDuty ( après 20 min )
+    1. Slack #incidents ( imm—diat )
+    2. SMS IC ( apr—s 5 min si non ack )
+    3. Email management ( apr—s 15 min )
+    4. PagerDuty ( apr—s 20 min )
     
 IF alert.severity == "warning":
-    1. Slack #security ( immédiat )
-    2. Email on-call ( après 30 min si non ack )
+    1. Slack #security ( imm—diat )
+    2. Email on-call ( apr—s 30 min si non ack )
 ```
 
 ---
 
-## Agrégation des Logs
+## Agr—gation des Logs
 
 L'API envoie les logs vers Loki pour :
 - Centralisation
 - Recherche full-text
 - Visualisation (Grafana)
-- Détection d'anomalies
+- D—tection d'anomalies
 
 Configuration :
 - URL Loki : http://loki:3100
@@ -970,29 +970,29 @@ Configuration :
 ## Distributed Tracing
 
 L'API utilise OpenTelemetry pour :
-- Traçage des requêtes
+- Tra—age des requ—tes
 - Performance monitoring
-- Debugging distribué
+- Debugging distribu—
 
 Exporteur : Jaeger
 
-## Rétention des Données
+## R—tention des Donn—es
 
-| Type de données | Durée de rétention |
+| Type de donn—es | Dur—e de r—tention |
 |-----------------|-------------------|
 | Logs | 90 jours |
 | Analyses | 90 jours |
 | Utilisateurs | 365 jours |
 | Logs d'audit | 7 ans |
 
-Les données sont supprimées automatiquement après la période.
+Les donn—es sont supprim—es automatiquement apr—s la p—riode.
 
 ## Audit Logging
 
-Toutes les opérations sensibles sont logged :
-- Création/Modification/Suppression
+Toutes les op—rations sensibles sont logged :
+- Cr—ation/Modification/Suppression
 - Authentification
-- Changements de rôle
-- Accès aux données sensibles
+- Changements de r—le
+- Acc—s aux donn—es sensibles
 
-Les logs d'audit sont conservés 7 ans.
+Les logs d'audit sont conserv—s 7 ans.
