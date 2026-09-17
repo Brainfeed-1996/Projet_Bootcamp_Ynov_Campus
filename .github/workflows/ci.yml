@@ -183,7 +183,7 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           ignore-unfixed: true
-          exit-code: "0"
+          exit-code: '1'
 
       - name: Scan image
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1

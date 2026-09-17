@@ -1,9 +1,11 @@
 # Log Sentinel API
 
-API **FastAPI** d'ingestion et d'analyse de logs sÃ©curisÃ©e, conÃ§ue pour un cours **DevSecOps** (Ynov â€” DÃ©fensive).
+API **FastAPI** d'ingestion et d'analyse de logs sÃ©curisÃ©e, conÃ§ue pour un cours **DevSecOps** (Ynov — DÃ©fensive).
 
-**Version** : `v1.1.0`  
+**Version** : `v1.0.0`  
 **Stack** : Python 3.11+, FastAPI, PostgreSQL, Docker, Docker Compose, Trivy, Vault (optionnel).
+
+> **Note** : La documentation reflÃ¨te l'Ã©tat rÃ©el de l'implÃ©mentation. Le rate limiting (constantes dÃ©finies) n'a pas encore de middleware actif ; les tests d'attente 429 Ã©choueront jusqu'Ã  implÃ©mentation.
 
 ---
 
@@ -138,6 +140,8 @@ curl http://localhost:5000/health
 docker compose down -v
 ```
 
+> **Version API** : `v1.0.0` (voir `/openapi.json` ou `/docs` pour le schÃ©ma complet). Le rate limiting est prÃ©vu (constantes dans `app.py`) mais le middleware n'est pas encore implÃ©mentÃ©.
+
 ---
 
 ## SÃ©curitÃ© et secrets
@@ -147,6 +151,8 @@ docker compose down -v
 - Aucune valeur par dÃ©faut n'est utilisÃ©e en production.
 - Production : `docker compose -f compose.yaml -f docker-compose.production.yml up --build -d`.
 - Vault : `docker compose -f compose.yaml -f docker-compose.vault.yml up --build -d`.
+
+> **Rate Limiting** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont dÃ©finies dans `app.py` mais **le middleware n'est pas encore implÃ©mentÃ©**. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'est pas actif.
 
 ### Clean machine
 
@@ -813,18 +819,11 @@ L'API est documentée via OpenAPI/Swagger à `/docs` (interface interactive) et `/
 
 ### Authentification
 
-Toutes les routes (sauf `/health` et `/docs`) nécessitent un token JWT dans l'en-tête `Authorization: Bearer <token>`. Obtenir un token via `POST /auth/login` (non implémenté dans cette version, voir `GET /users/{id}` pour lecture seule).
+L'authentification JWT est configurée (middleware, expiration 30 min, bcrypt cost 12). L'endpoint `POST /auth/login` est **non implémenté** dans cette version ; les routes protégées ne sont pas encore appliquées globalement. Voir `GET /users/{id}` pour lecture seule sans token.
 
 ### Rate Limiting
 
-| Endpoint | Limite |
-|----------|--------|
-| Authentification | 10 req/min |
-| Création de logs | 50 req/min |
-| Analyse IA | 30 req/min |
-| Lecture (GET) | 100 req/min |
-
-Headers de réponse : `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+> **Non implémenté** : Les constantes `RATE_LIMIT_AUTH=10/minute`, `RATE_LIMIT_LOGS_WRITE=50/minute`, `RATE_LIMIT_ANALYZE=30/minute`, `RATE_LIMIT_DEFAULT=100/minute` sont définies dans `app.py` mais **aucun middleware n'est actif**. Les headers `X-RateLimit-*` ne sont pas retournés. Les tests `test_rate_limit.py` attendent un comportement 429 qui n'existe pas encore.
 
 ### Utilisateurs (`/users`)
 
@@ -869,6 +868,8 @@ Headers de réponse : `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-
 | `POST` | `/logs/bulk` | Ingestion bulk JSON | `[LogCreate, ...]` (max 10000) | `200 BulkResult` |
 | `POST` | `/logs/ingest-csv` | Ingestion CSV (multipart) | Fichier `.csv` avec colonnes `message`, `level?`, `source?` | `200 BulkResult` |
 | `POST` | `/logs/{log_id}/analyze` | Analyser un log via LLM | — | `201 {id, log_id, result}` |
+| `GET` | `/logs/export` | Export CSV streaming (tous logs) | `chunk_size? (défaut 100)` | `text/csv` stream |
+| `GET` | `/logs/report` | Export CSV paginé avec filtres | `page?`, `page_size?`, `level?`, `source?` | `text/csv` stream |
 
 **LogCreate** :
 ```json
@@ -1010,11 +1011,52 @@ curl "http://localhost:5000/analyses?limit=10"
 
 ---
 
-### Export (`/export`)
+### Admin (`/admin`)
 
-| Méthode | Endpoint | Description | Paramètres | Réponse succès |
-|---------|----------|-------------|------------|----------------|
-| `GET` | `/export/logs` | Exporter les logs en JSON/CSV | `format? (json/csv)`, `level?`, `source?`, `from?`, `to?` | `200` (fichier) |
+| Méthode | Endpoint | Description | Corps de requête | Réponse succès |
+|---------|----------|-------------|------------------|----------------|
+| `POST` | `/admin/cleanup` | Supprimer logs/analyses > N jours | `days? (défaut 90)` | `200 {logs_deleted, analyses_deleted}` |
+| `POST` | `/admin/alerts` | Envoyer email alerte critique | `AlertPayload` | `200 {status: "sent"}` |
+
+> **Note** : Routes protégées par `X-API-Key` (service-à-service). Voir `API_KEYS` dans `app.py`.
+
+### Webhooks (`/webhooks`)
+
+Seul `POST /webhooks/log-created` est implémenté (reçoit notifications log créé). Les autres routes listées ci-dessous sont **non implémentées**.
+
+| Méthode | Endpoint | Description | Statut |
+|---------|----------|-------------|--------|
+| `POST` | `/webhooks/log-created` | Réception événement log créé | ? Implémenté |
+| `GET` | `/webhooks` | Lister webhooks | ? Non implémenté |
+| `POST` | `/webhooks` | Créer webhook | ? Non implémenté |
+| `GET` | `/webhooks/{id}` | Récupérer webhook | ? Non implémenté |
+| `DELETE` | `/webhooks/{id}` | Supprimer webhook | ? Non implémenté |
+| `POST` | `/webhooks/{id}/test` | Tester webhook | ? Non implémenté |
+
+### Santé et Monitoring (`/health`)
+
+| Méthode | Endpoint | Description | Réponse succès |
+|---------|----------|-------------|----------------|
+| `GET` | `/health` | Vérifier santé API + DB | `200 {status: "ok", database: "up"}` ou `503 {status: "error", database: "down"}` |
+
+> **Note** : `/metrics` et `/metrics/summary` (Prometheus) ne sont **pas implémentés** dans cette version.
+
+### Codes d'erreur globaux
+
+| Code | Signification |
+|------|---------------|
+| `200` | Succès (GET, PUT, DELETE) |
+| `201` | Créé (POST) |
+| `400` | Requête invalide (paramètres, validation métier) |
+| `401` | Non authentifié (token manquant/invalide) |
+| `403` | Interdit (CSRF, permissions insuffisantes) |
+| `404` | Ressource introuvable |
+| `409` | Conflit (doublon unique) |
+| `413` | Payload trop volumineux |
+| `422` | Erreur de validation Pydantic |
+| `500` | Erreur interne serveur |
+| `502` | Provider LLM indisponible |
+| `503` | Service indisponible (DB down) |
 | `GET` | `/export/analyses` | Exporter les analyses en JSON/CSV | `format? (json/csv)`, `severity?`, `from?`, `to?` | `200` (fichier) |
 | `GET` | `/export/users` | Exporter les utilisateurs | `format? (json/csv)` | `200` (fichier) |
 

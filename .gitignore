@@ -8,6 +8,7 @@ secrets/
 # Cache Python et test
 __pycache__/
 *.pyc
+.mypy_cache/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -38,3 +39,12 @@ Thumbs.db
 # Configuration locale
 *.local
 *.development
+
+# Artéfacts générés
+output/
+
+# Fichiers de travail locaux (non destinés au dépôt)
+__kilo_tmp/
+check_hashes.py
+check_exact_hashes.py
+rewrite_app.py
