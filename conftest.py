@@ -51,3 +51,15 @@ def _create_test_engine(*args, **kwargs):
 
 
 sqlalchemy.create_engine = _create_test_engine
+
+
+import pytest
+from app import app as _app
+from app import RateLimitMiddleware
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    RateLimitMiddleware.reset_all()
+    yield
+    RateLimitMiddleware.reset_all()
