@@ -63,6 +63,9 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "default-secret-key-change-me")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+# OAuth2 scheme for token authentication
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
 MAX_REQUEST_SIZE = 10 * 1024 * 1024
 MAX_BULK_ITEMS = 10000
 DEFAULT_REPORT_PAGE_SIZE = 1000
