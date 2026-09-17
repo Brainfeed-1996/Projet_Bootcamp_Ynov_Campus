@@ -217,11 +217,7 @@ def _create_engine():
             "sqlite:///:memory:",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
-            pool_size=DB_POOL_SIZE,
-            max_overflow=DB_MAX_OVERFLOW,
             pool_pre_ping=True,
-            pool_timeout=DB_POOL_TIMEOUT,
-            pool_recycle=DB_POOL_RECYCLE,
         )
         logger.info("Using in-memory SQLite for testing.")
     else:
