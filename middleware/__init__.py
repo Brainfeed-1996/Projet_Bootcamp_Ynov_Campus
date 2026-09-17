@@ -1,8 +1,13 @@
+import io
+import secrets
 import uuid
 
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
+
+GET_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+CSRF_METHODS = frozenset({"POST", "PUT", "DELETE", "PATCH"})
 
 
 class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
@@ -11,6 +16,9 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
         self.max_size = max_size
 
     async def dispatch(self, request: StarletteRequest, call_next):
+        if request.method in GET_METHODS:
+            return await call_next(request)
+
         content_length = request.headers.get("content-length")
         if content_length:
             try:
@@ -18,53 +26,72 @@ class RequestSizeLimitMiddleware(BaseHTTPMiddleware):
                 if size > self.max_size:
                     return JSONResponse(
                         status_code=413,
-                        content={"detail": f"Request body too large. Maximum size is {self.max_size} bytes."},
+                        content={
+                            "detail": f"Request body too large. Maximum size is {self.max_size} bytes."
+                        },
                     )
             except ValueError:
                 pass
 
-        body = b""
+        body = io.BytesIO()
         async for chunk in request.stream():
-            body += chunk
-            if len(body) > self.max_size:
+            if body.tell() + len(chunk) > self.max_size:
                 return JSONResponse(
                     status_code=413,
-                    content={"detail": f"Request body too large. Maximum size is {self.max_size} bytes."},
+                    content={
+                        "detail": f"Request body too large. Maximum size is {self.max_size} bytes."
+                    },
                 )
+            body.write(chunk)
+
+        body_bytes = body.getvalue()
 
         async def receive():
-            return {"type": "http.request", "body": body, "more_body": False}
+            return {
+                "type": "http.request",
+                "body": body_bytes,
+                "more_body": False,
+            }
 
         request._receive = receive
         return await call_next(request)
 
 
-SWAGGER_UI_SCRIPT_HASH = "sha256-QOOQu4W1oxGqd2nbXbxiA1Di6OHQOLQD+o+G9oWL8YY="
-SWAGGER_OAUTH_SCRIPT_HASH = "sha256-Q8NLdUrRI6i0tSYa9s7b5KZd7Adbpcz558UgROi6Hy8="
 SWAGGER_UI_CDN = "https://cdn.jsdelivr.net"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: StarletteRequest, call_next):
+        request.state.csp_nonce = secrets.token_urlsafe(16)
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
 
         if request.url.path == "/docs" or request.url.path.startswith("/docs/"):
             csp = (
                 "default-src 'self'; "
-                f"script-src 'self' {SWAGGER_UI_CDN} {SWAGGER_UI_SCRIPT_HASH} {SWAGGER_OAUTH_SCRIPT_HASH}; "
+                f"script-src 'self' {SWAGGER_UI_CDN} 'nonce-{request.state.csp_nonce}'; "
                 f"style-src 'self' 'unsafe-inline' {SWAGGER_UI_CDN}; "
                 "img-src 'self' data: https://fastapi.tiangolo.com; "
-                f"font-src 'self' {SWAGGER_UI_CDN}; connect-src 'self'"
+                f"font-src 'self' {SWAGGER_UI_CDN}; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'"
             )
         else:
             csp = (
-                "default-src 'self'; script-src 'self'; "
-                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-                "font-src 'self'; connect-src 'self'"
+                "default-src 'self'; "
+                "script-src 'self'; "
+                "style-src 'self' 'unsafe-inline'; "
+                "img-src 'self' data:; "
+                "font-src 'self'; "
+                "connect-src 'self'; "
+                "frame-ancestors 'none'; "
+                "base-uri 'self'; "
+                "form-action 'self'"
             )
 
         response.headers["Content-Security-Policy"] = csp
@@ -72,22 +99,33 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        if request.method in ['POST', 'PUT', 'DELETE', 'PATCH']:
+    async def dispatch(self, request: StarletteRequest, call_next):
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        if request.method in CSRF_METHODS:
             accept = request.headers.get("accept", "")
-            is_browser = "text/html" in accept
+            is_browser = "text/html" in accept and "application/json" not in accept
+
             if not is_browser:
                 return await call_next(request)
-            token = request.headers.get('X-CSRF-Token')
+
+            token = request.headers.get("X-CSRF-Token")
             if not token:
-                return JSONResponse(status_code=403, content={'detail': 'CSRF token missing'})
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "CSRF token missing"},
+                )
+
         return await call_next(request)
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+    REQUEST_ID_HEADER = "X-Request-ID"
+
+    async def dispatch(self, request: StarletteRequest, call_next):
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         response = await call_next(request)
-        response.headers['X-Request-ID'] = request_id
+        response.headers[RequestIDMiddleware.REQUEST_ID_HEADER] = request_id
         return response
